@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material3 风格圆形滑杆拇指（实心圆，运行时被 tint 成主题色） -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <size android:width="20dp" android:height="20dp" />
+    <solid android:color="#FFFFFF" />
+</shape>

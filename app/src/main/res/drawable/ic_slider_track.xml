@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Material3 风格滑杆轨道：圆角横条，激活段实色 + 未激活段半透明（运行时 tint） -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 未激活轨道（整条，半透明） -->
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <size android:height="4dp" />
+            <corners android:radius="2dp" />
+            <solid android:color="#66FFFFFF" />
+        </shape>
+    </item>
+    <!-- 激活轨道（左侧进度段，实色） -->
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <size android:height="4dp" />
+                <corners android:radius="2dp" />
+                <solid android:color="#FFFFFF" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

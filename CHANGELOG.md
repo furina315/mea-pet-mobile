@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [待定] - 2026-08-18-22:40
+
+### Added
+
+- **悬浮窗锁定机制** — 菜单新增「锁定 / 解锁」开关项（黑白线条矢量图标，运行时按 onSurface 染色、随明暗主题反色）。锁定后 Live2D 人物不可拖动 / 捏合缩放，但双击开菜单、三击关悬浮窗等轻触操作不受影响（`OverlayTouchHandler` 增加内存态 `locked` 标志，锁定时仅跳过 `ACTION_MOVE` 的位移/缩放，轻触位移判定仍以按下点为基准）。点击锁定项后不关闭菜单、就地刷新图标与文案，便于看到状态变化。菜单图标整体由 emoji 改为矢量线条（`ic_overlay_close/input/lock/unlock`）。
+- **悬浮窗透明度调节** — 菜单新增「透明度」项（半透方块叠层图标），点击后弹出独立调节面板（`OverlayAlphaWindow`，贴人物侧面、跟随移动）。内嵌 Material3 风格滑杆（圆头拇指 + 圆角轨道，激活段主题色、未激活段半透明，与设置页观感一致），拖动实时调人物透明度（`View.alpha`）；范围钳制在 20%–100%，防止调到 0 找不到人物。右上角带关闭按钮，无操作 6 秒自动隐藏。透明度为内存态、不持久化。
+
+### Changed
+
+- **悬浮窗气泡存活时长** — 由「2000ms + 25ms × 字数」改为「3000ms + 200ms × 字数」（`OverlayBubbleWindow.BASE_DURATION_MS` / `MS_PER_CHAR`），长文本停留时间显著加长，便于完整阅读回复。最长存活上限维持 15000ms 不变。
+
+---
+
+
 ## [待定] - 2026-08-18
 
 ### Added

@@ -35,10 +35,10 @@ class OverlayBubbleWindow(context: Context) {
         private const val TAG = "OverlayBubbleWindow"
 
         /** 气泡最短存活时间，ms。 */
-        private const val BASE_DURATION_MS = 2000L
+        private const val BASE_DURATION_MS = 3000L
 
         /** 每个字符额外存活时间，ms。 */
-        private const val MS_PER_CHAR = 25L
+        private const val MS_PER_CHAR = 200L
 
         /** 气泡最长存活时间，ms。 */
         private const val MAX_DURATION_MS = 15000L

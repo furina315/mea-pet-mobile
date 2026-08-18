@@ -12,28 +12,35 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import com.meapet.mobile.R
 import kotlin.math.roundToInt
 
 /**
  * 悬浮窗模式下的独立菜单悬浮窗。
  *
  * 平时隐藏，双击人物悬浮窗唤起，无操作 [AUTO_HIDE_MS] 后自动隐藏。
- * 紧凑竖排小面板，贴着人物悬浮窗的侧面（离屏幕较远的一侧）：
- * - ✕ 关闭菜单
- * - 🚪 关闭悬浮窗
- * - 💬 唤起输入
+ * 紧凑竖排小面板，贴着人物悬浮窗的侧面（离屏幕较远的一侧）。
+ * 图标为黑白线条矢量（运行时按 onSurface 染色，随明暗主题反色）：
+ * - 关闭悬浮窗 / 唤起输入 / 锁定·解锁 / 透明度
  *
  * @param context 上下文（Service 即可）
  * @param onCloseOverlay 关闭悬浮窗回调（停止整个前台服务）
  * @param onOpenInput 唤起输入框回调
+ * @param isLocked 当前是否处于锁定态（用于切换菜单项图标与文案）
+ * @param onToggleLock 点击锁定/解锁项回调（切换锁定态）
+ * @param onOpenAlpha 点击透明度项回调（打开透明度调节面板）
  */
 @SuppressLint("ViewConstructor")
 class OverlayMenuWindow(
     context: Context,
     private val onCloseOverlay: () -> Unit,
     private val onOpenInput: () -> Unit,
+    private val isLocked: () -> Boolean,
+    private val onToggleLock: () -> Unit,
+    private val onOpenAlpha: () -> Unit,
 ) {
     companion object {
         private const val TAG = "OverlayMenuWindow"
@@ -50,11 +57,11 @@ class OverlayMenuWindow(
         /** 每行高度，dp。 */
         private const val ITEM_HEIGHT_DP = 34f
 
-        private const val CLOSE_OVERLAY_EMOJI = "🚪"
-        private const val OPEN_INPUT_EMOJI = "💬"
-
         private const val CLOSE_OVERLAY_LABEL = "关闭悬浮窗"
         private const val OPEN_INPUT_LABEL = "唤起输入"
+        private const val LOCKED_LABEL = "解锁"
+        private const val UNLOCKED_LABEL = "锁定"
+        private const val ALPHA_LABEL = "透明度"
     }
 
     private val ctx: Context = context
@@ -99,6 +106,10 @@ class OverlayMenuWindow(
 
     private val autoHideRunnable = Runnable { hide() }
 
+    /** 锁定行的图标/文案视图引用（点击切换后就地刷新，不关菜单）。 */
+    private var lockIconView: ImageView? = null
+    private var lockLabelView: TextView? = null
+
     init {
         rootView = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -115,13 +126,30 @@ class OverlayMenuWindow(
                 resetAutoHide()
                 false
             }
-            addView(menuItemRow(CLOSE_OVERLAY_EMOJI, CLOSE_OVERLAY_LABEL) {
+            addView(menuItemRow(R.drawable.ic_overlay_close, CLOSE_OVERLAY_LABEL) {
                 hide()
                 onCloseOverlay()
             })
-            addView(menuItemRow(OPEN_INPUT_EMOJI, OPEN_INPUT_LABEL) {
+            addView(menuItemRow(R.drawable.ic_overlay_input, OPEN_INPUT_LABEL) {
                 hide()
                 onOpenInput()
+            })
+            // 锁定/解锁：切换后不关菜单，仅就地刷新图标与文案，便于看到状态变化
+            val lockRow = menuItemRow(
+                if (isLocked()) R.drawable.ic_overlay_unlock else R.drawable.ic_overlay_lock,
+                if (isLocked()) LOCKED_LABEL else UNLOCKED_LABEL
+            ) {
+                onToggleLock()
+                refreshLockRow()
+                resetAutoHide()
+            }
+            lockIconView = lockRow.getChildAt(0) as ImageView
+            lockLabelView = lockRow.getChildAt(1) as TextView
+            addView(lockRow)
+            // 透明度：关掉菜单，打开独立的透明度调节面板（滑杆实时调人物透明度）
+            addView(menuItemRow(R.drawable.ic_overlay_alpha, ALPHA_LABEL) {
+                hide()
+                onOpenAlpha()
             })
         }
         // WRAP_CONTENT 首次布局完才有实测宽高，统一在布局变化时重新定位
@@ -228,9 +256,16 @@ class OverlayMenuWindow(
         mainHandler.postDelayed(autoHideRunnable, AUTO_HIDE_MS)
     }
 
+    /** 依据当前锁定态刷新锁定行的图标与文案。 */
+    private fun refreshLockRow() {
+        val locked = isLocked()
+        lockIconView?.setImageResource(if (locked) R.drawable.ic_overlay_unlock else R.drawable.ic_overlay_lock)
+        lockLabelView?.text = if (locked) LOCKED_LABEL else UNLOCKED_LABEL
+    }
+
     // ================ 视图构建 ================
 
-    private fun menuItemRow(emoji: String, label: String, onClick: () -> Unit): LinearLayout =
+    private fun menuItemRow(iconRes: Int, label: String, onClick: () -> Unit): LinearLayout =
         LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -244,12 +279,13 @@ class OverlayMenuWindow(
             setOnClickListener { onClick() }
 
             addView(
-                TextView(ctx).apply {
-                    text = emoji
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    gravity = Gravity.CENTER
+                ImageView(ctx).apply {
+                    setImageResource(iconRes)
+                    // 黑白线条矢量按 onSurface 染色，随明暗主题反色保证可读
+                    setColorFilter(palette.onSurface)
+                    scaleType = ImageView.ScaleType.CENTER_INSIDE
                 },
-                LinearLayout.LayoutParams(dp(24), dp(24))
+                LinearLayout.LayoutParams(dp(20), dp(20))
             )
             addView(
                 TextView(ctx).apply {

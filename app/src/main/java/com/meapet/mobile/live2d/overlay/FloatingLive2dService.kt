@@ -79,6 +79,10 @@ class FloatingLive2dService : Service() {
     private var menuWindow: OverlayMenuWindow? = null
     private var inputWindow: OverlayInputWindow? = null
     private var bubbleWindow: OverlayBubbleWindow? = null
+    private var alphaWindow: OverlayAlphaWindow? = null
+
+    /** Live2D 悬浮窗当前透明度（内存态，不保存）。 */
+    private var overlayAlpha = 1f
 
     /** Screen-density conversion cache */
     private var _density = 0f
@@ -151,6 +155,8 @@ class FloatingLive2dService : Service() {
         menuWindow = null
         bubbleWindow?.destroy()
         bubbleWindow = null
+        alphaWindow?.destroy()
+        alphaWindow = null
         if (::glSurfaceView.isInitialized) {
             // 先在 GL 线程释放模型的 native 资源。事件在 onPause 之前入队：
             // GLSurfaceView 的 GL 线程按序处理事件队列且优先于暂停处理，
@@ -261,9 +267,36 @@ class FloatingLive2dService : Service() {
         menuWindow = OverlayMenuWindow(
             context = this,
             onCloseOverlay = { stopSelf() },
-            onOpenInput = { toggleInputWindow() }
+            onOpenInput = { toggleInputWindow() },
+            isLocked = { touchHandler.locked },
+            onToggleLock = { toggleLock() },
+            onOpenAlpha = { toggleAlphaWindow() }
         )
         inputWindow = OverlayInputWindow(this, onSend = ::sendFromOverlay, onClose = { inputWindow?.hide() })
+    }
+
+    /** 切换锁定态（内存态）：锁定后人物不可拖动/缩放，轻触操作不变。 */
+    private fun toggleLock() {
+        touchHandler.locked = !touchHandler.locked
+        Log.d(TAG, "Overlay lock toggled: ${touchHandler.locked}")
+    }
+
+    /** 打开/关闭透明度调节面板（toggle）。 */
+    private fun toggleAlphaWindow() {
+        if (alphaWindow?.isVisible == true) {
+            alphaWindow?.hide()
+        } else {
+            // 每次新建以读取最新 overlayAlpha 作初始滑杆位置；旧实例先销毁
+            alphaWindow?.destroy()
+            alphaWindow = OverlayAlphaWindow(this, overlayAlpha) { applyOverlayAlpha(it) }
+                .also { it.show(anchorRect()) }
+        }
+    }
+
+    /** 实时应用 Live2D 悬浮窗透明度（内存态）。 */
+    private fun applyOverlayAlpha(alpha: Float) {
+        overlayAlpha = alpha
+        if (::glSurfaceView.isInitialized) glSurfaceView.alpha = alpha
     }
 
     /** 当前人物悬浮窗在屏幕上的矩形（位置由 layoutParams 表达）。 */
@@ -272,11 +305,12 @@ class FloatingLive2dService : Service() {
         return Rect(p.x, p.y, p.x + p.width, p.y + p.height)
     }
 
-    /** 人物悬浮窗被拖动/缩放后，同步气泡与菜单的位置。 */
+    /** 人物悬浮窗被拖动/缩放后，同步气泡、菜单与透明度面板的位置。 */
     private fun repositionOverlayAnchors() {
         val r = anchorRect()
         bubbleWindow?.setAnchor(r)
         menuWindow?.takeIf { it.isVisible }?.reposition(r)
+        alphaWindow?.takeIf { it.isVisible }?.reposition(r)
     }
 
     private fun showMenu() {

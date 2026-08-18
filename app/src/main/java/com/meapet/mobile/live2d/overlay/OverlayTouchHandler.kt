@@ -35,6 +35,13 @@ class OverlayTouchHandler(
         private const val TAP_SLOP_DP = 24f
     }
 
+    /**
+     * 锁定标志（内存态）：true 时忽略拖动 / 捏合缩放，仅保留轻触判定
+     * （双击开菜单 / 三击关悬浮窗不受影响）。
+     */
+    @Volatile
+    var locked: Boolean = false
+
     private val minWinPx: Int get() = (100 * density).toInt()
     private val maxWinPx: Int get() = (600 * density).toInt()
     private val baseAspect: Float get() = 150f / 218f  // width / height
@@ -73,6 +80,9 @@ class OverlayTouchHandler(
             }
 
             MotionEvent.ACTION_MOVE -> {
+                // 锁定期间不改变窗口位置/尺寸；dragStart* 锚点在 DOWN 时已记录，
+                // ACTION_UP 的轻触位移判定仍以最初按下点为基准，不受影响
+                if (locked) return
                 if (event.pointerCount >= 2 && pinchStartDist > 0f) {
                     // --- PINCH: resize window ---
                     val curDist = calcPointerDistance(event)
