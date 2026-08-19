@@ -12,62 +12,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [待定] - 2026-08-18-22:40
+## [1.5.0] - 2026-08-19
 
 ### Added
 
-- **悬浮窗锁定机制** — 菜单新增「锁定 / 解锁」开关项（黑白线条矢量图标，运行时按 onSurface 染色、随明暗主题反色）。锁定后 Live2D 人物不可拖动 / 捏合缩放，但双击开菜单、三击关悬浮窗等轻触操作不受影响（`OverlayTouchHandler` 增加内存态 `locked` 标志，锁定时仅跳过 `ACTION_MOVE` 的位移/缩放，轻触位移判定仍以按下点为基准）。点击锁定项后不关闭菜单、就地刷新图标与文案，便于看到状态变化。菜单图标整体由 emoji 改为矢量线条（`ic_overlay_close/input/lock/unlock`）。
-- **悬浮窗透明度调节** — 菜单新增「透明度」项（半透方块叠层图标），点击后弹出独立调节面板（`OverlayAlphaWindow`，贴人物侧面、跟随移动）。内嵌 Material3 风格滑杆（圆头拇指 + 圆角轨道，激活段主题色、未激活段半透明，与设置页观感一致），拖动实时调人物透明度（`View.alpha`）；范围钳制在 20%–100%，防止调到 0 找不到人物。右上角带关闭按钮，无操作 6 秒自动隐藏。透明度为内存态、不持久化。
+- **悬浮窗锁定** — 菜单新增「锁定 / 解锁」开关，锁定后人物不可拖动 / 缩放，双击菜单、三击关闭不受影响；菜单图标统一为矢量线条风格。
+- **悬浮窗透明度调节** — 菜单新增「透明度」项，弹出独立滑杆面板实时调节人物透明度（20%–100%），无操作自动隐藏。
+- **聊天失败重试** — 聊天页错误 Snackbar 新增「重试」按钮，可重发上一条失败消息。
+- **System Prompt 恢复默认** — 设置页新增「恢复默认」按钮，一键还原为内置人设提示词。
 
 ### Changed
 
-- **悬浮窗气泡存活时长** — 由「2000ms + 25ms × 字数」改为「3000ms + 200ms × 字数」（`OverlayBubbleWindow.BASE_DURATION_MS` / `MS_PER_CHAR`），长文本停留时间显著加长，便于完整阅读回复。最长存活上限维持 15000ms 不变。
-
----
-
-
-## [待定] - 2026-08-18
-
-### Added
-
-- **包结构治理** — 拆出 `core`（AppInfo / PrivacyConsentManager / LifecycleManager）、独立 `config`（AppConfig）叶子包；`live2d` 拆为渲染核心 / `live2d.audio`（语音，为未来 TTS 留位）/ `live2d.overlay`（悬浮窗）三包；`MainActivity` 移入 `ui` 包；`ChatEvent` 移入 `viewmodel` 包。至此全部包级循环依赖消除，依赖方向单向、无循环。
-- **`framework` 包重命名为 `app`** — 拆分后 `framework` 只剩 `MeaPetApplication` + `AppContainer`，语义即「应用装配根」，重命名为 `app` 消除歧义；manifest `android:name` 与全库 import 同步。
-- **主题工具消歧** — `ui/theme/ThemeUtil.kt`（Compose 薄封装）并入 `Theme.kt`，与 `core/ThemeUtil.kt`（非 Compose 纯逻辑）不再重名。
-- **统一异常捕获约定** — 新增 `core/ErrorHandling`：协程 `CancellationException` 一律重抛、业务失败记录日志并返回可恢复结果、防御性静默须注释；提供 `runCatchingLog` 工具，已应用于 API 响应解析与更新检测解析（补上原缺失的失败日志）。
-- **气泡调度测试** — 新增 `SystemBubblePolicy` 纯策略类与 9 个 JVM 单元测试，覆盖寿命扣减、扣减上限与封底规则。
-- **悬浮窗渲染 / 手势拆分** — 从 `FloatingLive2dService` 拆出 `Live2dOverlayRenderer`（GL 渲染，回调解耦）与 `OverlayTouchHandler`（拖动 / 捏合 / 轻触判定），Service 只负责生命周期与窗口编排。
-- **聊天失败重试入口** — 聊天页错误 Snackbar 新增「重试」按钮，可重发上一条失败消息（`RetryLastMessage` 事件此前仅存在于 ViewModel 层、UI 未接线）。
-- **ViewModel 单元测试** — 新增 `ChatViewModelTest`（6 用例）与 `SettingsViewModelTest`（3 用例），覆盖事件分发 → 服务调用 → 状态更新链路；`SettingsViewModel` 静态依赖（隐私 / 版本号）改为可覆写的 protected 方法便于隔离。
-- **Release 构建开启 R8 优化** — `optimization { enable = true }` + 资源收缩；新增 `proguard-rules.pro`，保留 Live2D / 友盟 / kotlinx.serialization 的反射与序列化类，防止混淆后运行崩溃。
-
-### Changed
-
-- **`Live2dRenderState` 状态机制** — 4 个渲染协调标记由裸 `@Volatile` 静态变量改为 `StateFlow`（线程安全、可观察），`shuttingDown` 一并纳入；写入统一经 setter，并新增 `consumeShaderResetRequest()` 原子复合读。
-- **`SettingsViewModel` 订阅收拢** — 原 12 个手写 `collect` 块合并为泛型 `subscribe(flow, reducer)` 辅助；隐私授权状态并入 `SettingsUiState.privacyAgreed` 响应式订阅（此前为一次性同步读）。
-- **`SettingsScreen` 结构** — 主体拆分为 6 个功能 Section + 本地编辑状态 holder；魔法数字提取为命名常量（alpha / Slider 范围与步进），`onFocusChanged` 保存样板提取为 `saveOnFocusChange` 扩展，硬编码滑杆轨道色提取为 `sliderTrackColor`。
-- **`ChatScreen` 结构** — 拆分出 `MessageList`；Live2D 触摸分区开关改经 `ChatViewModel` 访问领域单例；版本号读取统一到 `AppInfo.readVersion`（消除 AppContainer / SettingsViewModel / ChatScreen 三处重复）；Bilibili 模型来源 URL 常量化；进程退出封装为 `exitAppSilently()`。
-- **主题判断统一** — 新增 `core/ThemeUtil` 主题解析纯逻辑（`resolveDarkTheme` / `isSystemNight` / context 版 `isDarkTheme`），Compose 场景薄封装于 `ui.theme`；消除 `live2d.overlay → ui.theme` 领域层反向依赖 UI 的分层违规。
-- **隐私调用归位** — 设置页隐私授权读取 / 撤销改经 `SettingsViewModel`，UI 不再直接触达 `PrivacyConsentManager`。
-- **默认 API 配置改为 DeepSeek** — 新装 / 重置用户的默认端点改为 `https://api.deepseek.com/v1`、默认模型改为 `deepseek-v4-flash`（`SettingsKeys.Defaults` 与输入框占位同步）；已保存配置的老用户不受影响。
-- **版本号读取统一** — `AppContainer` / `SettingsViewModel` / `ChatScreen` 三处重复的 PackageManager 读取收敛到 `AppInfo.readVersion`。
-- **静态分析与告警清理** — 修正 manifest（scheme 小写、弃用 API 标记、前台服务 targetApi）、OverlayPalette 壁纸取色 API 27 门禁、删除未使用的 import / 函数 / 属性（`reloadRenderer` / `getModelSetting` / `ChatUiState.isError` 等）、抑制「有意为之」的 deprecated / 静态引用告警；Gradle 构建显式声明本机 JDK 21 路径（解决 IDE 同步失败导致的满屏报红）。
-- **Git 换行符适配** — `.gitattributes` 补全文本/脚本/二进制规则（仓库统一 LF、工作区按平台自适应、`.bat` 强制 CRLF、`gradlew` 强制 LF、二进制禁转换），并将 `core.autocrlf` 由 `true` 改为 `false` 交由 `.gitattributes` 统一管理，避免 Windows / Linux 协作时双重转换。
+- **悬浮窗气泡存活时长加长** — 由「2s + 25ms/字」改为「3s + 200ms/字」，长回复便于完整阅读。
+- **默认 API 改为 DeepSeek** — 新装 / 重置用户默认端点 `https://api.deepseek.com/v1`、默认模型 `deepseek-v4-flash`；老用户配置不受影响。
+- **友盟分发渠道可配置** — 渠道名从 `local.properties` 注入，默认 `GitHub`。
+- **Release 构建开启 R8 优化** — 新增混淆规则保护 Live2D / 友盟 / 序列化类。
+- **内部质量** — 包结构治理（消除循环依赖、`framework` → `app`）、渲染 / 手势 / 设置等模块拆分、统一异常捕获与主题判断，并补充 ViewModel 与气泡策略单元测试。
 
 ### Fixed
 
-- **气泡寿命扣减无上限** — `SystemBubblePolicy.computeNextLife` 旧实现在位置 6+ 持续被新气泡挤压时无限扣减（两三个新气泡即可把 7 秒寿命扣到 0），与「共扣 4 秒」的注释意图矛盾。改为累计最多扣 2 次（4 秒）、寿命封底 3 秒。
-- **`!!` 断言全部消除** — 移除 `Live2dModel` / `Live2dView` / `Live2dManager` / `FloatingLive2dService` 共 46 处 `!!`，改安全调用 + 早退 / 局部非空绑定。
-- **协程取消被吞** — `SettingsViewModel.fetchModels`、`UpdateChecker.check` 在协程内 `catch (Exception)` 会吞掉 `CancellationException` 导致取消失效，补前置重抛。
-- **渲染状态复合判断竞态** — `Live2dDelegate` 对 `wasActive && !overlayActive` 的两次独立读取非原子，改走 `consumeShaderResetRequest()` 原子消费。
-- **记忆操作失败日志泄露内容** — `MemoryService` 应用记忆操作失败时会把整个 `MemoryOp`（含记忆正文）打进 Logcat，违反「对话内容不进日志」约定；改为只记录操作类型。
+- **悬浮窗渲染状态与内存泄漏** — 渲染协调标记改为 `StateFlow` 并原子消费，修复复合判断竞态与泄漏问题。
+- **气泡寿命扣减无上限** — 修复多气泡挤压时旧气泡寿命被无限扣减至 0 的问题，改为封顶扣减。
+- **其余稳定性修复** — 消除 46 处 `!!` 断言、协程取消被吞、记忆失败日志泄露内容等。
 
----
+### Notes
 
-## [待定] - 2026-08-17
-
-### Changed
-
-- **友盟分发渠道名可配置** — `UMENG_CHANNEL` 改为从 `local.properties` 的 `umeng.channel` 读取并注入 `BuildConfig`，按分发来源命名，开源分叉可直接替换；默认 `GitHub`，缺失时行为不变。
+- 相对 1.4.0 无破坏性变更，applicationId 不变，可覆盖安装。
 
 ---
 
