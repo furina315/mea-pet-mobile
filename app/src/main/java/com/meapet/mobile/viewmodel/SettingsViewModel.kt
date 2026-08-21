@@ -11,6 +11,8 @@ import com.meapet.mobile.core.PrivacyConsentManager
 import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.settings.SettingsKeys
 import com.meapet.mobile.settings.SettingsManager
+import com.meapet.mobile.tts.model.TtsModelManager
+import com.meapet.mobile.tts.model.TtsModelState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -49,13 +51,27 @@ data class SettingsUiState(
     val appVersion: String = "",
     val availableModels: List<String> = emptyList(),
     val isLoadingModels: Boolean = false,
-    val modelsError: String? = null
+    val modelsError: String? = null,
+    // ── TTS 语音 ──
+    val ttsMainEnabled: Boolean = SettingsKeys.Defaults.TTS_MAIN_ENABLED,
+    val ttsOverlayEnabled: Boolean = SettingsKeys.Defaults.TTS_OVERLAY_ENABLED,
+    val ttsLanguage: String = SettingsKeys.Defaults.TTS_LANGUAGE,
+    val ttsLengthScale: Double = SettingsKeys.Defaults.TTS_LENGTH_SCALE,
+    /** 模型下载状态（来自 TtsModelManager.state）。 */
+    val ttsModelState: TtsModelState = TtsModelState.NotDownloaded,
+    /** 日语词典是否已下载。 */
+    val ttsJaDicReady: Boolean = false,
+    /** 日语词典是否正在下载。 */
+    val ttsJaDicDownloading: Boolean = false,
+    /** 模型下载地址是否已配置（BuildConfig 注入）；未配置时下载入口提示。 */
+    val ttsModelUrlConfigured: Boolean = false
 )
 
 open class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val container = MeaPetApplication.from(application)
     private val settingsManager: SettingsManager = container.settingsManager
+    private val ttsModelManager: TtsModelManager = container.ttsModelManager
 
     private val _state = MutableStateFlow(initialState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
@@ -74,7 +90,14 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
             enableMemory = settingsManager.isMemoryEnabled(),
             enableAutoSummary = settingsManager.isAutoSummaryEnabled(),
             summaryInterval = settingsManager.getSummaryInterval(),
-            privacyAgreed = isPrivacyAgreed()
+            privacyAgreed = isPrivacyAgreed(),
+            ttsMainEnabled = settingsManager.isTtsMainEnabled(),
+            ttsOverlayEnabled = settingsManager.isTtsOverlayEnabled(),
+            ttsLanguage = settingsManager.getTtsLanguage(),
+            ttsLengthScale = settingsManager.getTtsLengthScale(),
+            ttsModelState = ttsModelManager.state.value,
+            ttsJaDicReady = ttsModelManager.isDicReady(),
+            ttsModelUrlConfigured = container.config.ttsModelBaseUrl.isNotBlank()
         )
     }
 
@@ -94,6 +117,15 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         subscribe(settingsManager.themeModeFlow) { s, m -> s.copy(themeMode = m) }
         subscribe(settingsManager.enableDynamicColorFlow) { s, e -> s.copy(enableDynamicColor = e) }
         subscribe(settingsManager.colorPresetFlow) { s, p -> s.copy(colorPreset = p) }
+
+        // TTS 语音
+        subscribe(settingsManager.ttsMainEnabledFlow) { s, e -> s.copy(ttsMainEnabled = e) }
+        subscribe(settingsManager.ttsOverlayEnabledFlow) { s, e -> s.copy(ttsOverlayEnabled = e) }
+        subscribe(settingsManager.ttsLanguageFlow) { s, l -> s.copy(ttsLanguage = l) }
+        subscribe(settingsManager.ttsLengthScaleFlow) { s, v -> s.copy(ttsLengthScale = v) }
+        subscribe(ttsModelManager.state) { s, st ->
+            s.copy(ttsModelState = st, ttsJaDicReady = ttsModelManager.isDicReady())
+        }
 
         // 隐私授权状态（响应式订阅：同意/撤销后 UI 即时反映）
         subscribe(privacyAgreedFlow()) { s, agreed ->
@@ -200,6 +232,78 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
 
     fun updateColorPreset(preset: String) {
         viewModelScope.launch { settingsManager.setColorPreset(preset) }
+    }
+
+    // ── TTS 语音 ──────────────────────────────────────
+
+    /** 模型是否就绪（未就绪时开关应置灰）。 */
+    fun isTtsModelReady(): Boolean = ttsModelManager.state.value == TtsModelState.Ready
+
+    fun updateTtsMainEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.setTtsMainEnabled(enabled) }
+    }
+
+    fun updateTtsOverlayEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.setTtsOverlayEnabled(enabled) }
+    }
+
+    /** 切换默认语音（ZH/JA）。切到日文且词典未下载时一并触发词典下载。 */
+    fun updateTtsLanguage(language: String) {
+        viewModelScope.launch {
+            settingsManager.setTtsLanguage(language)
+            if (language == "JA" && !ttsModelManager.isDicReady()) {
+                downloadJaDic()
+            }
+        }
+    }
+
+    fun updateTtsLengthScale(scale: Double) {
+        viewModelScope.launch { settingsManager.setTtsLengthScale(scale) }
+    }
+
+    /** 下载 TTS 模型（4 个 onnx）。地址未配置则进入 Error 提示。 */
+    fun downloadTtsModel() {
+        viewModelScope.launch {
+            val files = ttsModelManager.buildModelFiles(container.config.ttsModelBaseUrl)
+            ttsModelManager.download(files)
+        }
+    }
+
+    /** 下载日语词典（naist-jdic，~102MB）。用 piper 内置下载器（tar 解压 + sha256 校验）。 */
+    fun downloadJaDic() {
+        viewModelScope.launch {
+            _state.update { it.copy(ttsJaDicDownloading = true) }
+            try {
+                withContext(Dispatchers.IO) {
+                    // piper 下载器默认源为 HuggingFace 的 open_jtalk_dic.tar（带校验）
+                    com.piperplus.g2p.DictionaryDownloader.downloadFromHuggingFace(
+                        getApplication()
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e("SettingsViewModel", "日语词典下载失败", e)
+            } finally {
+                ttsModelManager.refreshState()
+                _state.update {
+                    it.copy(
+                        ttsJaDicDownloading = false,
+                        ttsJaDicReady = ttsModelManager.isDicReady()
+                    )
+                }
+            }
+        }
+    }
+
+    /** 删除模型与词典，并强制关闭两个语音开关。 */
+    fun deleteTtsModel() {
+        viewModelScope.launch {
+            ttsModelManager.deleteModel()
+            settingsManager.setTtsMainEnabled(false)
+            settingsManager.setTtsOverlayEnabled(false)
+            container.ttsManager.stop()
+        }
     }
 
     /**

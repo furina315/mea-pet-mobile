@@ -21,6 +21,9 @@ enum class ChatRole { system, user, assistant }
  * @property memoryOpsBlock 助手回复里附带的记忆协议块原文（含围栏），无则为 null。
  *   不参与 UI 展示，仅在组装 API 请求时贴回历史——模型是照着自己过去的回复学格式的，
  *   历史里若全是「没有块」的回复，system prompt 里写多少遍「必须输出」都压不过这份实证。
+ * @property ttsJaBlock 助手回复里附带的日语译本块原文（含围栏），无则为 null。
+ *   不参与 UI 展示；语音合成读其中的日语译本，组装历史时按当前语音语言剥离或替换正文
+ *   （见 [ConversationManager] 回贴逻辑与 [TtsLangProtocol]）。
  * @property id 唯一标识（UUID）
  * @property timestamp 消息时间戳
  * @property isStreaming 是否正在流式输出中（运行时状态，不持久化）
@@ -30,6 +33,7 @@ data class ChatMessage(
     val role: ChatRole,
     val content: String,
     val memoryOpsBlock: String? = null,
+    val ttsJaBlock: String? = null,
     val id: String = UUID.randomUUID().toString(),
     val timestamp: Long = System.currentTimeMillis(),
     @Transient val isStreaming: Boolean = false

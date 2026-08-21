@@ -21,6 +21,9 @@ val devName: String = localProperties.getProperty("app.devName", "") ?: ""
 val gitRepoUrl: String = localProperties.getProperty("app.gitRepoUrl", "") ?: ""
 val qqGroupUrl: String = localProperties.getProperty("app.qqGroupUrl", "") ?: ""
 val umengPolicyUrl: String = localProperties.getProperty("app.umengPolicyUrl", "") ?: ""
+// TTS 模型 / 日语词典下载地址（开源分叉时按需替换；缺省为空表示未配置，设置里下载入口将提示）
+val ttsModelBaseUrl: String = localProperties.getProperty("app.ttsModelBaseUrl", "") ?: ""
+val ttsJaDicUrl: String = localProperties.getProperty("app.ttsJaDicUrl", "") ?: ""
 
 android {
     namespace = "com.meapet.mobile"
@@ -35,7 +38,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode =  9
-        versionName = "1.5.0"
+        versionName = "1.6.0-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -52,6 +55,8 @@ android {
         buildConfigField("String", "GIT_REPO_URL", "\"$gitRepoUrl\"")
         buildConfigField("String", "QQ_GROUP_URL", "\"$qqGroupUrl\"")
         buildConfigField("String", "UMENG_POLICY_URL", "\"$umengPolicyUrl\"")
+        buildConfigField("String", "TTS_MODEL_BASE_URL", "\"$ttsModelBaseUrl\"")
+        buildConfigField("String", "TTS_JA_DIC_URL", "\"$ttsJaDicUrl\"")
     }
 
     buildTypes {
@@ -73,6 +78,19 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    // piper-plus-g2p 与 onnxruntime-android 的 AAR 都内嵌 libonnxruntime.so（版本不一，
+    // piper 的精简版缺 OrtGetApiBase）。解决办法：把 onnxruntime-android 1.23.2 的完整版
+    // 放进 app/src/main/jniLibs/（项目 jniLibs 在 pickFirst 中优先级高于 AAR 依赖），
+    // 并用 pickFirsts 去重，确保打包进的是含 OrtGetApiBase 的完整版。
+    packaging {
+        jniLibs {
+            pickFirsts += "lib/**/libonnxruntime.so"
+        }
+    }
+    // OpenJTalk 词典/拼音表等大文本 assets 需禁压缩（否则 aapt 压缩后某些读取路径会失败）
+    aaptOptions {
+        noCompress += listOf("bin", "dic", "txt")
     }
     testOptions {
         unitTests {
@@ -113,6 +131,13 @@ dependencies {
     // 友盟+ 统计 SDK (U-APP)
     implementation(libs.umeng.umsdk.common)  // 必选：统计核心
     implementation(libs.umeng.umsdk.asms)    // 必选：重要组件
+
+    // 本地 VITS TTS：ONNX Runtime + 日语 G2P（OpenJTalk 前端）
+    implementation(libs.onnxruntime.android)
+    // piper-plus-g2p 的 AAR 内嵌了精简版 libonnxruntime.so，与 onnxruntime-android 的 1.23.2 冲突
+    // （会导致 UnsatisfiedLinkError: OrtGetApiBase）。下面的 packagingOptions 把 piper 那份排除掉，
+    // 统一用 onnxruntime-android 的完整版；piper 自己的 libpiper_plus*.so 保留。
+    implementation(libs.piper.plus.g2p)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

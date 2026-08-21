@@ -216,6 +216,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             isLoading = false
                         )
                     }
+                    // 主界面语音（模型就绪且开关开启时才真正发声，否则静默跳过）
+                    container.ttsManager.speak(assistantMsg, com.meapet.mobile.tts.TtsManager.Source.MAIN)
                 },
                 onFailure = { error ->
                     _state.update {

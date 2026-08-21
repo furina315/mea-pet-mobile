@@ -3,6 +3,7 @@ package com.meapet.mobile.app
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.util.Log
+import com.meapet.mobile.BuildConfig
 import com.meapet.mobile.client.KtorHttpClientEngine
 import com.meapet.mobile.client.OpenAiCompatibleClient
 import com.meapet.mobile.chat.ChatService
@@ -15,6 +16,14 @@ import com.meapet.mobile.memory.MemoryManager
 import com.meapet.mobile.memory.MemoryRepository
 import com.meapet.mobile.memory.MemoryService
 import com.meapet.mobile.settings.SettingsManager
+import com.meapet.mobile.tts.TtsManager
+import com.meapet.mobile.tts.TtsSynthesizer
+import com.meapet.mobile.tts.VitsOnnxEngine
+import com.meapet.mobile.tts.audio.TtsAudioPlayer
+import com.meapet.mobile.tts.g2p.ChineseG2p
+import com.meapet.mobile.tts.g2p.G2pProcessor
+import com.meapet.mobile.tts.g2p.JapaneseG2p
+import com.meapet.mobile.tts.model.TtsModelManager
 import com.meapet.mobile.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +59,11 @@ import kotlinx.coroutines.launch
  */
 class AppContainer(
     private val context: Context,
-    val config: AppConfig = AppConfig.DEFAULT
+    val config: AppConfig = AppConfig.fromBuildConfig(
+        ttsModelBaseUrl = BuildConfig.TTS_MODEL_BASE_URL,
+        ttsJaDicUrl = BuildConfig.TTS_JA_DIC_URL,
+        appVersion = BuildConfig.VERSION_NAME
+    )
 ) {
     companion object {
         private const val TAG = "AppContainer"
@@ -137,6 +150,38 @@ class AppContainer(
                     Log.i(TAG, "系统内存紧张（level=$level），由各组件自行在下次操作时清理")
                 }
             }
+        )
+    }
+
+    // ── TTS 语音 ──────────────────────────────────────
+
+    /** TTS 模型/词典下载与状态管理。 */
+    val ttsModelManager: TtsModelManager by lazy {
+        TtsModelManager(context)
+    }
+
+    /** VITS 四模块 ONNX 推理引擎（懒加载 73MB 权重）。 */
+    private val vitsEngine: VitsOnnxEngine by lazy {
+        VitsOnnxEngine(ttsModelManager)
+    }
+
+    /** G2P 编排：中文走纯拼音映射；日语走 OpenJTalk（词典需已下载）。 */
+    private val g2pProcessor: G2pProcessor by lazy {
+        G2pProcessor(
+            chinese = ChineseG2p(context),
+            japanese = JapaneseG2p(context, ttsModelManager),
+            english = null   // 本期占位，不开放
+        )
+    }
+
+    /** TTS 门面：开关判断、分句、串行合成播放。 */
+    val ttsManager: TtsManager by lazy {
+        TtsManager(
+            settingsManager = settingsManager,
+            modelManager = ttsModelManager,
+            synthesizer = TtsSynthesizer(vitsEngine, g2pProcessor),
+            player = TtsAudioPlayer(),
+            scope = applicationScope
         )
     }
 

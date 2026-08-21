@@ -88,6 +88,8 @@ import com.meapet.mobile.ui.theme.isDarkTheme
 import com.meapet.mobile.viewmodel.SettingsUiState
 import com.meapet.mobile.viewmodel.SettingsViewModel
 import com.meapet.mobile.settings.SettingsKeys
+import com.meapet.mobile.tts.g2p.TtsLanguage
+import com.meapet.mobile.tts.model.TtsModelState
 
 // ── 视觉常量（语义命名，避免魔法数字） ──────────────────
 
@@ -189,6 +191,7 @@ fun SettingsScreen(
             ModelParamsSection(state, settingsViewModel, local, darkTheme)
             SystemPromptSection(settingsViewModel, local)
             MemorySection(state, settingsViewModel, local, darkTheme)
+            TtsSection(state, settingsViewModel, darkTheme)
             ThemeSection(state, settingsViewModel, darkTheme)
             PrivacySection(state, settingsViewModel, onOpenPrivacyPolicy, onExitApp)
 
@@ -528,8 +531,183 @@ private fun MemorySection(
     )
 }
 
-/** 主题：模式选择 + 动态颜色开关 + 颜色预设。 */
+/** 语音：模型下载管理 + 主/悬浮窗开关 + 默认语音 + 语速。 */
 @Composable
+private fun TtsSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    darkTheme: Boolean
+) {
+    SectionTitle("语音")
+
+    val modelReady = state.ttsModelState is com.meapet.mobile.tts.model.TtsModelState.Ready
+
+    // ── 语音模型管理 ──
+    TtsModelCard(state, viewModel)
+
+    Spacer(Modifier.height(8.dp))
+
+    // ── 发声开关（模型未就绪时置灰）──
+    SettingsSwitchRow(
+        label = "主界面语音",
+        description = if (modelReady) "对话回复在主界面朗读" else "需先下载语音模型",
+        checked = state.ttsMainEnabled && modelReady,
+        darkTheme = darkTheme,
+        onCheckedChange = { viewModel.updateTtsMainEnabled(it) },
+        enabled = modelReady
+    )
+    SettingsSwitchRow(
+        label = "悬浮窗语音",
+        description = if (modelReady) "悬浮窗回复朗读" else "需先下载语音模型",
+        checked = state.ttsOverlayEnabled && modelReady,
+        darkTheme = darkTheme,
+        onCheckedChange = { viewModel.updateTtsOverlayEnabled(it) },
+        enabled = modelReady
+    )
+
+    // ── 默认语音（中/日）──
+    Spacer(Modifier.height(4.dp))
+    Text(
+        "默认语音",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (modelReady) 1f else 0.5f)
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        TtsLanguage.entries.forEach { lang ->
+            val selected = state.ttsLanguage.equals(lang.name, ignoreCase = true)
+            val label = when (lang) {
+                com.meapet.mobile.tts.g2p.TtsLanguage.ZH -> "中文"
+                com.meapet.mobile.tts.g2p.TtsLanguage.JA -> "日语"
+                com.meapet.mobile.tts.g2p.TtsLanguage.EN -> "英语(暂缺)"
+            }
+            val enabledNow = modelReady && lang != com.meapet.mobile.tts.g2p.TtsLanguage.EN
+            FilterChipLike(
+                label = label,
+                selected = selected,
+                enabled = enabledNow,
+                onClick = { viewModel.updateTtsLanguage(lang.name) }
+            )
+        }
+    }
+
+    // ── 语速 ──
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "语速: ${"%.2f".format(state.ttsLengthScale)}x",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (modelReady) 1f else 0.5f)
+    )
+    Slider(
+        value = state.ttsLengthScale.toFloat(),
+        onValueChange = { viewModel.updateTtsLengthScale(it.toDouble()) },
+        valueRange = 0.5f..2.0f,
+        enabled = modelReady,
+        modifier = Modifier.fillMaxWidth(),
+        colors = SliderDefaults.colors(inactiveTrackColor = sliderTrackColor(darkTheme))
+    )
+}
+
+/** 语音模型下载状态卡：状态显示 + 下载/进度/删除。 */
+@Composable
+private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            when (val st = state.ttsModelState) {
+                is com.meapet.mobile.tts.model.TtsModelState.Ready -> {
+                    Text("语音模型已就绪", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (state.ttsJaDicReady) "含日语词典" else "日语词典未下载（切到日语时自动下载）",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { viewModel.deleteTtsModel() }) {
+                        Text("删除模型")
+                    }
+                }
+                is com.meapet.mobile.tts.model.TtsModelState.Downloading -> {
+                    Text("正在下载语音模型…", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        st.currentFile,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressLike(progress = st.progress)
+                }
+                is com.meapet.mobile.tts.model.TtsModelState.Error -> {
+                    Text("下载失败", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        st.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { viewModel.downloadTtsModel() }) { Text("重试") }
+                }
+                is com.meapet.mobile.tts.model.TtsModelState.NotDownloaded -> {
+                    Text("语音模型未下载", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (state.ttsModelUrlConfigured) "约 73MB，下载后开放语音功能"
+                        else "未配置模型下载地址",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.downloadTtsModel() },
+                        enabled = state.ttsModelUrlConfigured
+                    ) { Text("下载模型 (73MB)") }
+                }
+            }
+        }
+    }
+}
+
+/** 轻量进度条（包一层避免引入额外 import 差异）。 */
+@Composable
+private fun LinearProgressLike(progress: Float) {
+    androidx.compose.material3.LinearProgressIndicator(
+        progress = { progress.coerceIn(0f, 1f) },
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+/** 轻量选择片（替代 FilterChip，保持现有视觉风格）。 */
+@Composable
+private fun FilterChipLike(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable(enabled = enabled) { onClick() },
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(20.dp),
+        border = if (selected) androidx.compose.foundation.BorderStroke(
+            1.dp, MaterialTheme.colorScheme.primary
+        ) else null
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+        )
+    }
+}
+
+/** 主题：模式选择 + 动态颜色开关 + 颜色预设。 */@Composable
 private fun ThemeSection(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
