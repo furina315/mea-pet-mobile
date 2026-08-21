@@ -18,6 +18,3 @@ local.properties
 /.idea/
 /.kotlin/
 /.claude/
-
-# ONNX Runtime 原生库体积过大(~76MB),不入库,需自行放置
-/app/src/main/jniLibs/

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6.0] - 2026-08-21
+## [1.6.0-alpha] - 2026-08-21
 
 ### Added
 
@@ -27,7 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **中文 G2P 全量拼音表** — 内置约 4.2 万字拼音数据（kMandarin 规范读音，含声调），常用字全覆盖；多音字按词表定音。修复早期版本因字典过小导致「只会零星读几个字」的问题。
-- **安装包大幅瘦身** — 原生推理库（ONNX Runtime）改为运行时按需下载，并只打包 `arm64-v8a` / `armeabi-v7a` 两个真机架构（砍掉 x86 模拟器架构），APK 由约 115MB 降至约 24MB。
 - **推理链路** — 新增 `tts` 包：VITS 四模块 ONNX 引擎、时长展开 / 先验展开 / SDP 采样等胶水逻辑（移植自参考实现）、符号表与中文 G2P、AudioTrack 流式播放器、模型下载管理器。整段一次合成播放，新回复自动打断旧朗读。
 
 ### Removed
@@ -37,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 
-- 语音模型与运行库需联网下载一次（GitHub Releases，地址经 `local.properties` 注入）；下载完成后纯离线可用。
+- 语音模型与运行库需联网下载一次（GitHub Releases，地址经 `local.properties` 注入）。
 - 相对 1.5.0 无破坏性变更，applicationId 不变，可覆盖安装。
 
 ---
