@@ -80,9 +80,8 @@ class SettingsViewModelTest {
         whenever(settingsManager.getTtsLanguage()).thenReturn("ZH")
         whenever(settingsManager.getTtsLengthScale()).thenReturn(1.0)
 
-        // TTS 模型管理器（state 流 + 词典就绪查询）
+        // TTS 模型管理器（state 流）
         whenever(ttsModelManager.state).thenReturn(MutableStateFlow(TtsModelState.NotDownloaded))
-        whenever(ttsModelManager.isDicReady()).thenReturn(false)
 
         // 全部设置 Flow（init 订阅）
         whenever(settingsManager.apiKeyFlow).thenReturn(MutableStateFlow(""))

@@ -8,7 +8,6 @@ import com.meapet.mobile.config.AppConfig
 import com.meapet.mobile.memory.MemoryManager
 import com.meapet.mobile.memory.MemoryOpsProtocol
 import com.meapet.mobile.settings.SettingsManager
-import com.meapet.mobile.tts.g2p.TtsLanguage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,17 +74,11 @@ class ChatService(
                 val temperature = settingsManager.getTemperature()
                 val maxTokens = settingsManager.getMaxTokens()
 
-                // 语音协议：默认语音为日文时，要求模型在回复末尾附日语译本块（骨架）
-                val ttsJaEnabled =
-                    TtsLanguage.fromStored(settingsManager.getTtsLanguage()) == TtsLanguage.JA
-
                 // 4) 构建 API 请求。时间与记忆回忆一起压在历史之后：都是每轮都变的内容，
                 //    放前面会让排在其后的协议说明与全部历史都无法命中服务端 prefix cache
                 val tailContext = listOfNotNull(
                     TimeContext.describe(),
-                    memoryContext?.tail?.takeIf { it.isNotBlank() },
-                    // 日语译本块说明放尾部，紧邻历史，命中率更高（与记忆 reminder 同理）
-                    if (ttsJaEnabled) TtsLangProtocol.instructions() else null
+                    memoryContext?.tail?.takeIf { it.isNotBlank() }
                 ).joinToString("\n\n")
 
                 // 记忆关闭时 stable 为空（模型压根没收到协议说明），历史里也不该回贴协议块
@@ -95,10 +88,7 @@ class ChatService(
                     stableContext = memoryContext?.stable ?: "",
                     tailContext = tailContext,
                     maxMessages = config.maxHistoryMessages,
-                    memoryOpsEchoTurns = if (memoryOn) config.memoryOpsEchoTurns else 0,
-                    // 日文态：历史里该轮正文替换为日语译本，保持语言一致；中文态剥块
-                    ttsJaMode = if (ttsJaEnabled)
-                        ConversationManager.TtsJaMode.REPLACE else ConversationManager.TtsJaMode.STRIP
+                    memoryOpsEchoTurns = if (memoryOn) config.memoryOpsEchoTurns else 0
                 )
 
                 val jsonMessages = apiMessages.map { msg ->
@@ -134,21 +124,11 @@ class ChatService(
                 // 6b) 剥离模型附在回复末尾的记忆协议块（对用户不可见，见 MemoryOpsProtocol）
                 val parsed = MemoryOpsProtocol.extract(assistantContent)
                 val memoryOps = parsed.ops
-                // 6c) 日文态再剥日语译本块（在记忆块之后；中文态跳过）。
-                //     jaText 供语音合成用，rawBlock 存进消息供历史回贴/替换。
-                var visibleReply = parsed.visibleReply
-                var ttsJaBlock: String? = null
-                if (ttsJaEnabled) {
-                    val ttsParsed = TtsLangProtocol.extract(parsed.visibleReply)
-                    visibleReply = ttsParsed.visibleReply
-                    ttsJaBlock = ttsParsed.rawBlock
-                }
                 val assistantMessage = ChatMessage(
                     role = ChatRole.assistant,
-                    content = visibleReply,
+                    content = parsed.visibleReply,
                     // 块留在消息上（不展示），下一轮贴回历史当格式范例，见 ConversationManager
-                    memoryOpsBlock = parsed.rawBlock,
-                    ttsJaBlock = ttsJaBlock
+                    memoryOpsBlock = parsed.rawBlock
                 )
                 conversationManager.addMessage(assistantMessage)
 

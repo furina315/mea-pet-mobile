@@ -576,18 +576,16 @@ private fun TtsSection(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // 当前仅开放中文；保留选择 UI 以便后续扩展其它语言
         TtsLanguage.entries.forEach { lang ->
             val selected = state.ttsLanguage.equals(lang.name, ignoreCase = true)
             val label = when (lang) {
                 com.meapet.mobile.tts.g2p.TtsLanguage.ZH -> "中文"
-                com.meapet.mobile.tts.g2p.TtsLanguage.JA -> "日语"
-                com.meapet.mobile.tts.g2p.TtsLanguage.EN -> "英语(暂缺)"
             }
-            val enabledNow = modelReady && lang != com.meapet.mobile.tts.g2p.TtsLanguage.EN
             FilterChipLike(
                 label = label,
                 selected = selected,
-                enabled = enabledNow,
+                enabled = modelReady,
                 onClick = { viewModel.updateTtsLanguage(lang.name) }
             )
         }
@@ -623,7 +621,7 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                 is com.meapet.mobile.tts.model.TtsModelState.Ready -> {
                     Text("语音模型已就绪", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        if (state.ttsJaDicReady) "含日语词典" else "日语词典未下载（切到日语时自动下载）",
+                        "模型与运行库已下载，语音功能可用",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -655,7 +653,7 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                 is com.meapet.mobile.tts.model.TtsModelState.NotDownloaded -> {
                     Text("语音模型未下载", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        if (state.ttsModelUrlConfigured) "约 73MB，下载后开放语音功能"
+                        if (state.ttsModelUrlConfigured) "约 92MB（模型 + 运行库），下载后开放语音功能"
                         else "未配置模型下载地址",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -664,7 +662,7 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                     OutlinedButton(
                         onClick = { viewModel.downloadTtsModel() },
                         enabled = state.ttsModelUrlConfigured
-                    ) { Text("下载模型 (73MB)") }
+                    ) { Text("下载模型") }
                 }
             }
         }

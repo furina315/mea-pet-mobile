@@ -95,18 +95,13 @@ class ConversationManager(
      * @param maxMessages 最大消息数（滑动窗口，从末尾取）
      * @param memoryOpsEchoTurns 最近多少条助手消息要把 [ChatMessage.memoryOpsBlock] 贴回正文
      *   （0 = 不贴）。仅影响发给模型的副本，不改动会话历史本身
-     * @param ttsJaMode 日语译本块处理模式（骨架）：
-     *   `STRIP` = 中文态，历史里剥掉 [ChatMessage.ttsJaBlock] 不占上下文；
-     *   `REPLACE` = 日文态，历史里把该轮正文替换为日语译本（保持语言一致、防中文回流）。
-     *   与记忆块回贴相互独立。
      */
     fun buildApiMessages(
         systemPrompt: String,
         stableContext: String = "",
         tailContext: String = "",
         maxMessages: Int = 30,
-        memoryOpsEchoTurns: Int = 0,
-        ttsJaMode: TtsJaMode = TtsJaMode.STRIP
+        memoryOpsEchoTurns: Int = 0
     ): List<ChatMessage> {
         val systemContent = buildString {
             append(systemPrompt)
@@ -121,16 +116,12 @@ class ConversationManager(
 
         return buildList {
             add(ChatMessage(role = ChatRole.system, content = systemContent))
-            val echoed = echoMemoryOps(recentMessages, memoryOpsEchoTurns)
-            addAll(applyTtsJa(echoed, ttsJaMode))
+            addAll(echoMemoryOps(recentMessages, memoryOpsEchoTurns))
             if (tailContext.isNotBlank()) {
                 add(ChatMessage(role = ChatRole.system, content = tailContext))
             }
         }
     }
-
-    /** 日语译本块的历史注入策略。 */
-    enum class TtsJaMode { STRIP, REPLACE }
 
     /** 清除所有消息。 */
     fun clear() {
@@ -179,26 +170,6 @@ class ConversationManager(
 
         return msgs.map { msg ->
             if (msg.id in echoIds) msg.copy(content = "${msg.content}\n\n${msg.memoryOpsBlock}") else msg
-        }
-    }
-
-    /**
-     * 按当前语音语言处理历史里的日语译本块（骨架）。
-     *
-     * - STRIP（中文态）：正文已是中文，块不进历史（本就不存进 content，这里无需动作；
-     *   显式保留语义，便于后续若把块写进 content 时在此剥离）。
-     * - REPLACE（日文态）：把有 [ChatMessage.ttsJaBlock] 的助手消息正文替换为块内日语译本，
-     *   让模型看到的对话历史全程是日文，维持语言一致、避免中文回流污染语音语境。
-     *
-     * 只影响发给模型的副本，不改动会话历史本身。
-     */
-    private fun applyTtsJa(msgs: List<ChatMessage>, mode: TtsJaMode): List<ChatMessage> {
-        if (mode != TtsJaMode.REPLACE) return msgs
-        return msgs.map { msg ->
-            if (msg.role == ChatRole.assistant && !msg.ttsJaBlock.isNullOrBlank()) {
-                // 剥掉围栏，只留译本正文作为该轮的展示内容
-                msg.copy(content = TtsLangProtocol.jaTextOfBlock(msg.ttsJaBlock) ?: msg.content)
-            } else msg
         }
     }
 

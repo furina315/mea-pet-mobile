@@ -59,10 +59,6 @@ data class SettingsUiState(
     val ttsLengthScale: Double = SettingsKeys.Defaults.TTS_LENGTH_SCALE,
     /** 模型下载状态（来自 TtsModelManager.state）。 */
     val ttsModelState: TtsModelState = TtsModelState.NotDownloaded,
-    /** 日语词典是否已下载。 */
-    val ttsJaDicReady: Boolean = false,
-    /** 日语词典是否正在下载。 */
-    val ttsJaDicDownloading: Boolean = false,
     /** 模型下载地址是否已配置（BuildConfig 注入）；未配置时下载入口提示。 */
     val ttsModelUrlConfigured: Boolean = false
 )
@@ -96,7 +92,6 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
             ttsLanguage = settingsManager.getTtsLanguage(),
             ttsLengthScale = settingsManager.getTtsLengthScale(),
             ttsModelState = ttsModelManager.state.value,
-            ttsJaDicReady = ttsModelManager.isDicReady(),
             ttsModelUrlConfigured = container.config.ttsModelBaseUrl.isNotBlank()
         )
     }
@@ -123,9 +118,7 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         subscribe(settingsManager.ttsOverlayEnabledFlow) { s, e -> s.copy(ttsOverlayEnabled = e) }
         subscribe(settingsManager.ttsLanguageFlow) { s, l -> s.copy(ttsLanguage = l) }
         subscribe(settingsManager.ttsLengthScaleFlow) { s, v -> s.copy(ttsLengthScale = v) }
-        subscribe(ttsModelManager.state) { s, st ->
-            s.copy(ttsModelState = st, ttsJaDicReady = ttsModelManager.isDicReady())
-        }
+        subscribe(ttsModelManager.state) { s, st -> s.copy(ttsModelState = st) }
 
         // 隐私授权状态（响应式订阅：同意/撤销后 UI 即时反映）
         subscribe(privacyAgreedFlow()) { s, agreed ->
@@ -247,56 +240,24 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch { settingsManager.setTtsOverlayEnabled(enabled) }
     }
 
-    /** 切换默认语音（ZH/JA）。切到日文且词典未下载时一并触发词典下载。 */
+    /** 切换默认语音（当前仅中文，保留接口以便后续扩展）。 */
     fun updateTtsLanguage(language: String) {
-        viewModelScope.launch {
-            settingsManager.setTtsLanguage(language)
-            if (language == "JA" && !ttsModelManager.isDicReady()) {
-                downloadJaDic()
-            }
-        }
+        viewModelScope.launch { settingsManager.setTtsLanguage(language) }
     }
 
     fun updateTtsLengthScale(scale: Double) {
         viewModelScope.launch { settingsManager.setTtsLengthScale(scale) }
     }
 
-    /** 下载 TTS 模型（4 个 onnx）。地址未配置则进入 Error 提示。 */
+    /** 下载 TTS 模型（4 个 onnx + 当前 ABI 的原生库）。地址未配置则进入 Error 提示。 */
     fun downloadTtsModel() {
         viewModelScope.launch {
-            val files = ttsModelManager.buildModelFiles(container.config.ttsModelBaseUrl)
+            val files = ttsModelManager.buildDownloadFiles(container.config.ttsModelBaseUrl)
             ttsModelManager.download(files)
         }
     }
 
-    /** 下载日语词典（naist-jdic，~102MB）。用 piper 内置下载器（tar 解压 + sha256 校验）。 */
-    fun downloadJaDic() {
-        viewModelScope.launch {
-            _state.update { it.copy(ttsJaDicDownloading = true) }
-            try {
-                withContext(Dispatchers.IO) {
-                    // piper 下载器默认源为 HuggingFace 的 open_jtalk_dic.tar（带校验）
-                    com.piperplus.g2p.DictionaryDownloader.downloadFromHuggingFace(
-                        getApplication()
-                    )
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                android.util.Log.e("SettingsViewModel", "日语词典下载失败", e)
-            } finally {
-                ttsModelManager.refreshState()
-                _state.update {
-                    it.copy(
-                        ttsJaDicDownloading = false,
-                        ttsJaDicReady = ttsModelManager.isDicReady()
-                    )
-                }
-            }
-        }
-    }
-
-    /** 删除模型与词典，并强制关闭两个语音开关。 */
+    /** 删除模型与原生库，并强制关闭两个语音开关。 */
     fun deleteTtsModel() {
         viewModelScope.launch {
             ttsModelManager.deleteModel()

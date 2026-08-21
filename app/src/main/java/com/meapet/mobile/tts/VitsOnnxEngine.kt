@@ -36,6 +36,8 @@ class VitsOnnxEngine(private val modelManager: TtsModelManager) {
 
     private fun session(name: String): OrtSession = synchronized(sessionLock) {
         sessions.getOrPut(name) {
+            // 首次推理前确保运行时下载的原生库已加载（System.load filesDir 里的 .so）
+            modelManager.ensureNativeLoaded()
             val file: File = modelManager.modelFile("$name.onnx")
             Log.i(TAG, "加载 ONNX 模块 $name (${file.length() / 1024 / 1024}MB)")
             env.createSession(file.absolutePath, OrtSession.SessionOptions())

@@ -22,7 +22,6 @@ import com.meapet.mobile.tts.VitsOnnxEngine
 import com.meapet.mobile.tts.audio.TtsAudioPlayer
 import com.meapet.mobile.tts.g2p.ChineseG2p
 import com.meapet.mobile.tts.g2p.G2pProcessor
-import com.meapet.mobile.tts.g2p.JapaneseG2p
 import com.meapet.mobile.tts.model.TtsModelManager
 import com.meapet.mobile.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
@@ -61,7 +60,6 @@ class AppContainer(
     private val context: Context,
     val config: AppConfig = AppConfig.fromBuildConfig(
         ttsModelBaseUrl = BuildConfig.TTS_MODEL_BASE_URL,
-        ttsJaDicUrl = BuildConfig.TTS_JA_DIC_URL,
         appVersion = BuildConfig.VERSION_NAME
     )
 ) {
@@ -165,13 +163,9 @@ class AppContainer(
         VitsOnnxEngine(ttsModelManager)
     }
 
-    /** G2P 编排：中文走纯拼音映射；日语走 OpenJTalk（词典需已下载）。 */
+    /** G2P 编排：中文走拼音映射。 */
     private val g2pProcessor: G2pProcessor by lazy {
-        G2pProcessor(
-            chinese = ChineseG2p(context),
-            japanese = JapaneseG2p(context, ttsModelManager),
-            english = null   // 本期占位，不开放
-        )
+        G2pProcessor(chinese = ChineseG2p(context))
     }
 
     /** TTS 门面：开关判断、分句、串行合成播放。 */
