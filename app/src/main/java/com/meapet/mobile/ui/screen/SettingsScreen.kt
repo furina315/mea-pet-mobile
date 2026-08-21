@@ -792,7 +792,43 @@ private fun PrivacySection(
 
     Spacer(Modifier.height(8.dp))
 
-    // 友盟统计数据采集授权状态
+    // 导出日志（拉起系统分享，发给开发者排查问题）
+    val exportingLog by viewModel.exportingLog.collectAsState()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !exportingLog) { viewModel.exportLog() },
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (exportingLog) "正在导出日志…" else "导出日志",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            if (exportingLog) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer { rotationZ = 180f }
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(

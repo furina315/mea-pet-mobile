@@ -354,6 +354,25 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         _state.update { it.copy(modelsError = null) }
     }
 
+    // ── 日志导出 ──────────────────────────────────────
+
+    /** 是否正在导出日志（驱动按钮 loading/禁用）。 */
+    private val _exportingLog = MutableStateFlow(false)
+    val exportingLog: StateFlow<Boolean> = _exportingLog.asStateFlow()
+
+    /** 导出本次启动以来的应用日志并拉起系统分享。 */
+    fun exportLog() {
+        if (_exportingLog.value) return
+        viewModelScope.launch {
+            _exportingLog.value = true
+            try {
+                com.meapet.mobile.core.LogExporter.exportAndShare(getApplication())
+            } finally {
+                _exportingLog.value = false
+            }
+        }
+    }
+
     // ── 隐私合规 ──────────────────────────────────────
     // 授权状态已并入 [SettingsUiState.privacyAgreed]（init 订阅 agreedFlow 响应式维护）
 
