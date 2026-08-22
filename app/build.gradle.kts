@@ -37,13 +37,11 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode =  9
-        versionName = "1.6.0-alpha"
+        versionName = "1.6.0-alpha3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            // 只打真机架构：arm64-v8a（现代机）+ armeabi-v7a（旧 32 位机）。
-            // 砍掉 x86/x86_64 模拟器架构——onnxruntime 单份 ~19MB，砍两个 ABI 省 ~45MB。
             abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6.0-alpha] - 2026-08-21
+## [1.6.0-alpha*] - 2026-08-21
 
 ### Added
 
@@ -22,7 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **主界面 / 悬浮窗独立开关** — 两个发声场景各自控制；模型未就绪时开关置灰。
   - **语速调节** — 滑杆调整朗读语速（0.5x–2.0x）。
   - **语言选择** — 预留切换入口，当前仅开放中文。
-- **日志一键导出** — 设置页「隐私与数据」新增「导出日志」：抓取本次启动以来的应用日志写入 `.log`（含版本 / 设备 / 系统 / ABI 头信息），拉起系统分享菜单，便于向开发者提交问题日志。仅抓本进程日志、不含对话内容。
+- **日志一键导出** — 设置页「隐私与数据」新增「导出日志」：抓取应用日志写入 `.log`，拉起系统分享菜单，便于向开发者提交问题日志。内容含：
+  - **版本 / 设备 / 系统 / ABI 头信息**；
+  - **Native 崩溃记录（tombstone）** — 经 `getHistoricalProcessExitReasons` 读取本进程历史 native 崩溃（段错误等）的退出原因与完整堆栈（Android 11+；低版本自动跳过）；
+  - **全量 logcat** — 抓取整个日志缓冲区（不限定进程，覆盖独立进程的服务与崩溃前上下文）。项目日志不打对话正文，可放心分享。
 
 ### Changed
 
@@ -40,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 相对 1.5.0 无破坏性变更，applicationId 不变，可覆盖安装。
 
 ---
+
+## [1.5.0] - 2026-08-19
 
 ### Added
 

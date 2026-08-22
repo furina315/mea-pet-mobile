@@ -8,6 +8,23 @@
 -keep class com.live2d.sdk.cubism.** { *; }
 -dontwarn com.live2d.sdk.cubism.**
 
+# ── ONNX Runtime ───────────────────────────────────────
+# 开源应用，宽保留省心：整个 ONNX Runtime Java 层（被 JNI native 回调）不混淆不裁剪，
+# 避免 R8 干掉反射/JNI 入口导致语音合成崩溃
+-keep class ai.onnxruntime.** { *; }
+-dontwarn ai.onnxruntime.**
+
+# ── TTS 语音包 ─────────────────────────────────────────
+# 自有 TTS 代码宽保留：G2P / ONNX 引擎 / 播放器 / 模型管理，与 native 层和文件路径交互多，
+# 保留全量避免混淆引入隐性问题
+-keep class com.meapet.mobile.tts.** { *; }
+-dontwarn com.meapet.mobile.tts.**
+
+# native 方法一律保留（ONNX / Live2D 等含 native 声明的类）
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+
 # ── 友盟+ 统计 SDK ────────────────────────────────────
 # AAR 自带混淆规则，兜底保留，避免上报数据异常
 -keep class com.umeng.** { *; }
