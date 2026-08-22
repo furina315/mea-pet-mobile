@@ -168,7 +168,7 @@ class AppContainer(
         G2pProcessor(chinese = ChineseG2p(context))
     }
 
-    /** TTS 门面：开关判断、分句、串行合成播放。 */
+    /** TTS 门面：开关判断、整段合成播放。 */
     val ttsManager: TtsManager by lazy {
         TtsManager(
             settingsManager = settingsManager,
@@ -176,7 +176,22 @@ class AppContainer(
             synthesizer = TtsSynthesizer(vitsEngine, g2pProcessor),
             player = TtsAudioPlayer(),
             scope = applicationScope
-        )
+        ).also { wireVoiceMutex() }
+    }
+
+    /**
+     * 接线触摸语音 ↔ TTS 互斥（经 Live2dDelegate 的进程级 hook，避免包间反向依赖）：
+     * - 触摸语音触发时若 TTS 在播，先停 TTS；
+     * - TTS 开始播放时停掉未完触摸语音。
+     */
+    private fun wireVoiceMutex() {
+        // 触摸语音触发时若 TTS 在播，先停 TTS
+        com.meapet.mobile.live2d.Live2dDelegate.ttsPlayingChecker = { ttsManager.isPlaying.value }
+        com.meapet.mobile.live2d.Live2dDelegate.ttsStopper = { ttsManager.stop() }
+        // TTS 开始播放时停掉未完的触摸语音
+        TtsManager.onPlaybackStart = {
+            com.meapet.mobile.live2d.Live2dDelegate.getInstance().stopTouchVoices()
+        }
     }
 
     // ── 启动预热 ──────────────────────────────────────

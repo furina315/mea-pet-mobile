@@ -89,7 +89,6 @@ import com.meapet.mobile.viewmodel.SettingsUiState
 import com.meapet.mobile.viewmodel.SettingsViewModel
 import com.meapet.mobile.settings.SettingsKeys
 import com.meapet.mobile.tts.g2p.TtsLanguage
-import com.meapet.mobile.tts.model.TtsModelState
 
 // ── 视觉常量（语义命名，避免魔法数字） ──────────────────
 
@@ -452,6 +451,9 @@ private fun SystemPromptSection(
 ) {
     SectionTitle("System Prompt")
 
+    // 内联二次确认：true=已变「确认恢复？」等待再次点击
+    var confirmReset by remember { mutableStateOf(false) }
+
     Column {
         OutlinedTextField(
             value = local.systemPrompt,
@@ -465,17 +467,34 @@ private fun SystemPromptSection(
 
         Spacer(Modifier.height(8.dp))
 
-        // ★ 新增：恢复默认按钮
+        // 恢复默认：首次点击变红字「确认恢复？」，再次点击才执行；失焦/超时自动还原
         OutlinedButton(
             onClick = {
-                // 1. 立即更新本地编辑状态（文本框内容瞬间变化）
-                local.systemPrompt = SettingsKeys.Defaults.SYSTEM_PROMPT
-                // 2. 异步写入 DataStore
-                viewModel.resetSystemPrompt()
+                if (confirmReset) {
+                    confirmReset = false
+                    // 1. 立即更新本地编辑状态（文本框内容瞬间变化）
+                    local.systemPrompt = SettingsKeys.Defaults.SYSTEM_PROMPT
+                    // 2. 异步写入 DataStore
+                    viewModel.resetSystemPrompt()
+                } else {
+                    confirmReset = true
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("恢复默认")
+            Text(
+                text = if (confirmReset) "确认恢复？" else "恢复默认",
+                color = if (confirmReset) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    // 确认状态 3 秒无操作自动还原，避免误留
+    LaunchedEffect(confirmReset) {
+        if (confirmReset) {
+            kotlinx.coroutines.delay(3000)
+            confirmReset = false
         }
     }
 }
@@ -580,7 +599,7 @@ private fun TtsSection(
         TtsLanguage.entries.forEach { lang ->
             val selected = state.ttsLanguage.equals(lang.name, ignoreCase = true)
             val label = when (lang) {
-                com.meapet.mobile.tts.g2p.TtsLanguage.ZH -> "中文"
+                TtsLanguage.ZH -> "中文"
             }
             FilterChipLike(
                 label = label,
