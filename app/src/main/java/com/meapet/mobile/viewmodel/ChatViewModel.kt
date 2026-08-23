@@ -68,10 +68,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             val restored = chatService.getHistory()
             if (restored.isNotEmpty()) {
                 _state.update { current ->
-                    // 保留加载期间产生的新消息（按 id 去重，恢复的历史在前）
-                    val currentIds = restored.map { it.id }.toSet()
-                    val newDuringLoad = current.messages.filter { it.id !in currentIds }
-                    current.copy(messages = restored + newDuringLoad)
+                    current.copy(messages = mergeWithHistory(restored, current.messages))
                 }
             }
         }
@@ -142,19 +139,53 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
      *
      * 悬浮窗期间对话发生在共享的 [ChatService]（同一 ConversationManager）里，
      * 本 ViewModel 的内存状态不会自动同步；后台切前台时调用一次，把最新历史合并
-     * 进列表。合并按 id 去重，**保留当前界面里所有尚未落库的消息**（系统气泡、乐观
-     * 消息等），绝不覆盖内存状态；发送中（isLoading）跳过，交由在途任务自行更新，
-     * 避免重复。
+     * 进列表。
+     *
+     * ## 合并规则（修复长对话错位）
+     * [ConversationManager] 有滑动窗口（超 [config.maxHistoryMessages] 从头部裁剪最旧消息），
+     * 而本 ViewModel 的内存列表**从不裁剪**。若用「history + 所有不在 history 的消息」重建，
+     * 被窗口裁掉的旧消息会被误判为"新消息"拼到列表末尾 → 顺序错乱。
+     *
+     * 正确合并：**以 history 最后一个 id 为分界**——history 之前的消息一律以 history 为准
+     * （丢弃本 ViewModel 里已落后的旧副本）；history 之后才是真正的新追加（乐观消息、
+     * 触摸系统气泡），按原顺序保留在尾部。历史本身保证有序（同源 ConversationManager）。
      */
     fun reloadHistory() {
         if (_state.value.isLoading) return
         val history = chatService.getHistory()
         if (history.isEmpty()) return
-        _state.update { current ->
-            val historyIds = history.map { it.id }.toSet()
-            val extra = current.messages.filterNot { it.id in historyIds }
-            current.copy(messages = history + extra)
+        _state.update { cur ->
+            cur.copy(messages = mergeWithHistory(history, cur.messages))
         }
+    }
+
+    /**
+     * 把会话历史合并进当前 UI 消息列表（[reloadHistory] 与启动预热共用）。
+     *
+     * [ConversationManager] 有滑动窗口（超 [config.maxHistoryMessages] 从头部裁剪最旧消息），
+     * 而本 ViewModel 的内存列表**从不裁剪**。若用「history + 所有不在 history 的消息」重建，
+     * 被窗口裁掉的旧消息会被误判为"新消息"拼到列表末尾 → 顺序错乱。
+     *
+     * 正确合并：**以 history 最后一个 id 为分界**——history 之前的消息一律以 history 为准
+     * （丢弃本 ViewModel 里已落后的旧副本）；history 之后才是真正的新追加（乐观消息、
+     * 触摸系统气泡），按原顺序保留在尾部。历史本身保证有序（同源 ConversationManager）。
+     */
+    internal fun mergeWithHistory(history: List<ChatMessage>, current: List<ChatMessage>): List<ChatMessage> {
+        if (history.isEmpty()) return current
+        val lastHistoryId = history.last().id
+        val historyIds = history.mapTo(HashSet()) { it.id }
+        val idxInCurrent = current.indexOfLast { it.id == lastHistoryId }
+        val tailExtra = if (idxInCurrent >= 0) {
+            // current 里位于该分界之后的都是新追加，按原顺序保留
+            current.drop(idxInCurrent + 1)
+        } else {
+            // 分界消息在当前列表里找不到（极端情况：history 整体都领先于 current），
+            // 保守起见保留 current 末尾最近的几条（系统气泡等短生命周期消息）
+            current.takeLast(5)
+        }
+        // 去重：tailExtra 里若已包含 history 中出现的 id（如悬浮窗已落库），去掉
+        val tailExtraDeduped = tailExtra.filter { it.id !in historyIds }
+        return history + tailExtraDeduped
     }
 
     /**
