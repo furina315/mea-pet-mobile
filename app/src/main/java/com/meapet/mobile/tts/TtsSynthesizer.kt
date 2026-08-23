@@ -19,9 +19,9 @@ class TtsSynthesizer(
     }
 
     data class SynthesisConfig(
-        val noiseScale: Float = 0.667f,    // 音高随机性，越大越有感情
-        val noiseScaleW: Float = 0.8f,     // 时长随机性，越大节奏越自然
-        val lengthScale: Float = 1.0f      // 语速：<1 变快，>1 变慢
+        val noiseScale: Float = 0.5f,     // 音高随机性，越大越有感情；0.667→0.5 更稳，契合角色平淡语气
+        val noiseScaleW: Float = 0.65f,   // 时长随机性，越大节奏越自然；0.8→0.65 节奏更顺
+        val lengthScale: Float = 1.0f     // 语速：<1 变快，>1 变慢
     )
 
     /**

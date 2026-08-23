@@ -11,6 +11,11 @@ import android.content.Context
  * 3. 拼音 → 声母/韵母 → [PinyinTable] 映射到 68 符号 IPA。
  *
  * 逐字转换，不做分词（词边界/连读留待后续按效果再调）。
+ *
+ * ## 不可读内容的兜底（防空输出）
+ * 拉丁字母/数字/未收录汉字等无法发音的内容不再静默丢弃，统一降级为「空格」停顿音素：
+ * 一条回复里夹带的英文、数字、符号不会把整段打散成无声；连续空白折叠为单个停顿，
+ * 避免一口气憋过长的静音。保证任何非空文本都产出非空音素序列（合成必有输出）。
  */
 class ChineseG2p(context: Context) : LanguageG2p {
 
@@ -34,8 +39,11 @@ class ChineseG2p(context: Context) : LanguageG2p {
         while (i < chars.size) {
             val ch = chars[i]
             when {
-                ch.isWhitespace() -> out.add(" ")
+                // 空白/换行：折叠为单个停顿（连续空白不叠加，避免长静音）
+                ch.isWhitespace() -> if (out.isEmpty() || out.last() != " ") out.add(" ")
+
                 ch in PUNCT -> out.add(PUNCT.getValue(ch))
+
                 isCjk(ch) -> {
                     // 多音词优先：匹配以当前字开头的多音词（取最长）
                     val word = matchPolyphone(chars, i)
@@ -43,12 +51,18 @@ class ChineseG2p(context: Context) : LanguageG2p {
                         word.forEach { out.addAll(PinyinTable.pinyinToSymbols(it)) }
                         i += word.size - 1   // 跳过该词剩余字（循环末尾再 +1）
                     } else {
-                        PinyinDict.lookupChar(ch)?.let { out.addAll(PinyinTable.pinyinToSymbols(it)) }
-                        // 未收录汉字：跳过（不产出表外符号）
+                        // 未收录汉字（生僻字/词典缺口）：降级为停顿音素，不静默丢字
+                        val py = PinyinDict.lookupChar(ch)
+                        if (py != null) {
+                            out.addAll(PinyinTable.pinyinToSymbols(py))
+                        } else if (out.isEmpty() || out.last() != " ") {
+                            out.add(" ")
+                        }
                     }
                 }
-                // 拉丁字母/数字暂不入模型（中文模型对其读音弱），跳过
-                else -> Unit
+
+                // 拉丁字母/数字/表情等无法发音：降级为停顿音素（不静默丢字）
+                else -> if (out.isEmpty() || out.last() != " ") out.add(" ")
             }
             i++
         }

@@ -80,17 +80,24 @@ class TtsManager(
      * @param source 触发来源（决定用哪个开关）
      */
     fun speak(message: ChatMessage, source: Source) {
-        if (!isEnabledFor(source)) return
+        Log.d(TAG, "speak(source=$source) 进入，content='${message.content.trim().take(30)}'")
+        if (!isEnabledFor(source)) {
+            Log.d(TAG, "speak: 开关关闭（$source），跳过朗读")
+            return
+        }
         if (_sessionMuted.value) {
             Log.d(TAG, "本次会话已静音，跳过朗读")
             return
         }
         if (modelManager.state.value != TtsModelState.Ready) {
-            Log.d(TAG, "模型未就绪，跳过朗读")
+            Log.d(TAG, "模型未就绪（state=${modelManager.state.value}），跳过朗读")
             return
         }
         var text = message.content.trim()
-        if (text.isEmpty()) return
+        if (text.isEmpty()) {
+            Log.d(TAG, "speak: content 空白，跳过")
+            return
+        }
         // 超长截断：防止 attn 矩阵随文本长度平方膨胀致 OOM（见 MAX_SYNTH_CHARS）
         if (text.length > MAX_SYNTH_CHARS) {
             Log.w(TAG, "文本超长（${text.length} 字），截断为前 $MAX_SYNTH_CHARS 字朗读")
@@ -101,6 +108,7 @@ class TtsManager(
 
         // 打断上一段：取消合成 + 停止播放
         currentJob?.cancel()
+        Log.d(TAG, "speak: 已取消上一段 currentJob，调用 player.stop()")
         player.stop()
 
         // 合成放 IO 线程池：首次 G2P 要读两个大词典（IO 密集），ONNX 推理走 native 计算，
@@ -108,17 +116,21 @@ class TtsManager(
         currentJob = scope.launch(Dispatchers.IO) {
             _isPlaying.value = true
             try {
+                Log.d(TAG, "speak: 开始合成 '${text.take(20)}' (${text.length} 字, lenScale=$lengthScale)")
                 val audio = synthesizer.synthesize(
                     text, TtsLanguage.ZH,
                     config = TtsSynthesizer.SynthesisConfig(lengthScale = lengthScale)
                 )
+                Log.d(TAG, "speak: 合成完成，audio=${audio.size} 样本")
                 if (audio.isNotEmpty()) {
                     onPlaybackStart?.invoke()   // 互斥：停掉未完的触摸语音
                     player.play(audio)          // 播完经 onPlaybackComplete 解除 isPlaying
                 } else {
+                    Log.w(TAG, "speak: 合成为空数组，静默跳过（无声！）")
                     _isPlaying.value = false
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.d(TAG, "speak: 合成被取消（上一段被打断）")
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "合成失败: $text", e)
@@ -129,6 +141,7 @@ class TtsManager(
 
     /** 停止当前朗读并取消待合成任务。 */
     fun stop() {
+        Log.d(TAG, "stop() 调用（取消合成 + 停播放）")
         currentJob?.cancel()
         currentJob = null
         player.stop()
