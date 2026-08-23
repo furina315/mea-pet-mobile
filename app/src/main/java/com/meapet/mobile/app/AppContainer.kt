@@ -210,7 +210,16 @@ class AppContainer(
         warmUpJob = applicationScope.launch(Dispatchers.IO) {
             listOf(
                 launch { memoryRepository.loadFromDisk() },
-                launch { conversationManager.restore(conversationStore.load()) }
+                launch { conversationManager.restore(conversationStore.load()) },
+                // Live2D 模型文件预读到内存缓存：模型加载在 GL 线程同步执行，
+                // asset 读取是最大耗时（阻塞主线程 onPause 数秒）。预热后 GL 线程
+                // 只做解析 + GL 上传，启动/切前后台不再长时间卡顿。
+                launch {
+                    runCatching {
+                        com.meapet.mobile.live2d.Live2dManager.getInstance()
+                            .prewarmModel(context)
+                    }.onFailure { Log.w(TAG, "Live2D 模型预热失败", it) }
+                }
             ).joinAll()
         }
     }

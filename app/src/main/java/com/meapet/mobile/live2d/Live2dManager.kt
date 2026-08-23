@@ -74,6 +74,17 @@ class Live2dManager private constructor() {
         }
     }
 
+    /**
+     * 启动时异步预热模型文件到内存缓存（IO 线程）。
+     *
+     * [loadModel] 在 GL 线程同步执行（onSurfaceCreated），asset 读取是最大耗时来源，
+     * 会拖住 GL 线程 → 主线程 `GLSurfaceView.onPause` 等待数秒。预热后 [Live2dPal.loadFileAsBytes]
+     * 命中缓存，GL 线程只做解析 + GL 上传，启动/切前后台不再长时间阻塞。
+     */
+    fun prewarmModel(context: android.content.Context) {
+        Live2dPal.prewarmDirectory(context, MODEL_DIR_NAME)
+    }
+
     fun onUpdate() {
         val m = model ?: return
         val delegate = Live2dDelegate.getInstance()

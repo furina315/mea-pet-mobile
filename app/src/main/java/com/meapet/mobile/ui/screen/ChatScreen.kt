@@ -203,13 +203,9 @@ private fun ChatPage(
         }
     }
 
-    // 新消息追加到底部时自动滚动。
-    // 只看「最新一条消息的 id」，而不是 messages.size：中间移除（触摸气泡超时消失）、
-    // reloadHistory 合并等引起的 size 变化不应打断用户当前阅读位置，也避免无谓的滚动动画
-    // 放大排版错乱（配合上方 LazyColumn 底部对齐问题，见 MessageList 注释）。
-    val lastMessageId = state.messages.lastOrNull()?.id
-    LaunchedEffect(lastMessageId) {
-        if (lastMessageId != null) {
+    // 新消息时自动滚动到底部
+    LaunchedEffect(state.messages.size) {
+        if (state.messages.isNotEmpty()) {
             listState.animateScrollToItem(state.messages.size - 1)
         }
     }
@@ -328,10 +324,8 @@ private fun MessageList(
             .fillMaxSize()
             .padding(bottom = 88.dp)
             .padding(horizontal = 4.dp, vertical = 8.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
-        // 注意：不要用 verticalArrangement = Arrangement.Bottom。
-        // LazyColumn 内容超过视口时，Bottom 对齐 + 虚拟化 + key 复用会产生
-        // 已知的定位错乱（长对话时气泡串位）。聊天滚动到底应靠 scrollToItem 实现。
+        contentPadding = PaddingValues(vertical = 8.dp),
+        verticalArrangement = Arrangement.Bottom
     ) {
         if (state.messages.isEmpty()) {
             item {

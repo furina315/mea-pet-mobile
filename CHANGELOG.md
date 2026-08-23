@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **修复模型下载偶发崩溃（`IllegalMonitorStateException`）** — `TtsModelManager.download` 原用 `ReentrantLock` 保护下载：该锁是**线程绑定**的，而 `downloadOne` 内的网络挂起点会让协程恢复切到另一 IO 线程，`finally { unlock() }` 在非持锁线程执行即崩溃。修复：改用协程友好的 `kotlinx.coroutines.sync.Mutex`（不绑定线程）。
+- **修复 Live2D 切后台主线程卡顿（onPause 阻塞数秒）** — 模型文件在 GL 线程 `onSurfaceCreated` 同步读取 asset（moc3 / 贴图 / 动作 / 物理等），耗时几秒期间主线程 `GLSurfaceView.onPause` 干等。修复：新增 `Live2dPal` **文件字节缓存**，启动时 `AppContainer.warmUp` 在 IO 线程**预热整目录**，GL 线程只做解析 + GL 上传，切前后台不再长时间阻塞。
 - **修复 TTS 偶发「一条消息没有语音」** — 两个根因一并解决：
   - **AudioTrack 并发写竞态** — 上一句未播完时下一句打断，旧写线程仍阻塞在 native `write()` 上（Java `interrupt()` 无法解除），`stop` 线程却已 pause/flush 同一 track → 两个线程并发操作同一非线程安全的 `AudioTrack`，状态损坏后新段随机无声。修复：停止时**先 pause/flush 解除 write 阻塞再 join 等待写线程退出**；join 超时则释放该 track 强制重建；`obtainTrack` **改为每段新建 AudioTrack，不再复用**，从根上杜绝并发写同一 track。
   - **G2P 防空输出** — 回复里的拉丁字母 / 数字 / 未收录汉字此前被静默丢弃，纯符号或字母开头的回复会整段合成出空数组而无声。修复：不可读内容统一降级为停顿音素，连续空白折叠；`G2pProcessor` 空结果兜底为单个空格停顿，**保证任何非空文本都有语音输出**。

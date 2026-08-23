@@ -80,7 +80,7 @@ class TtsModelManager(private val context: Context) {
     private var nativeLoaded = false
 
     /** 下载重入锁：防止并发下载写同一批 .part 临时文件。 */
-    private val downloadLock = java.util.concurrent.locks.ReentrantLock()
+    private val downloadLock = kotlinx.coroutines.sync.Mutex()
 
     private val client = HttpClient(CIO) {
         expectSuccess = false
@@ -147,8 +147,14 @@ class TtsModelManager(private val context: Context) {
         Log.i(TAG, "ONNX Runtime 原生库已加载：${lib.absolutePath} ($deviceAbi)")
     }
 
-    /** 顺序下载一组文件，逐个流式落盘并更新进度。已存在且校验通过的文件跳过（断点续传）。
-     *  重入保护：正在下载时再次调用直接忽略，避免两个下载协程写同一批 .part 临时文件。 */
+    /**
+     * 顺序下载一组文件，逐个流式落盘并更新进度。已存在且校验通过的文件跳过（断点续传）。
+     *
+     * 重入保护：正在下载时再次调用直接忽略，避免两个下载协程写同一批 .part 临时文件。
+     * 用协程 [kotlinx.coroutines.sync.Mutex] 而非 `ReentrantLock`：后者是线程绑定锁，
+     * 而本函数内 `downloadOne` 有挂起点（网络 IO），协程恢复可能切到另一个 IO 线程，
+     * 届时 `finally { unlock() }` 会在非持锁线程执行 → `IllegalMonitorStateException`。
+     */
     suspend fun download(files: List<ModelFile>) = withContext(Dispatchers.IO) {
         if (!downloadLock.tryLock()) {
             Log.w(TAG, "正在下载中，忽略重复调用")
@@ -195,7 +201,8 @@ class TtsModelManager(private val context: Context) {
                 _state.value = TtsModelState.Error(e.message ?: "下载失败")
             }
         } finally {
-            downloadLock.unlock()
+            // tryLock 成功才走到这里；unlock 需持有锁（协程 Mutex 不绑定线程）
+            try { downloadLock.unlock() } catch (_: IllegalStateException) {}
         }
     }
 
