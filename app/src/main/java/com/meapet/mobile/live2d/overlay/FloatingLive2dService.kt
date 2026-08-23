@@ -377,6 +377,8 @@ class FloatingLive2dService : Service() {
                 onSuccess = { (_, assistant) ->
                     inputWindow?.clearText()
                     bubbleWindow?.addBubble(assistant.content)
+                    // 悬浮窗语音（模型就绪且开关开启时才真正发声，否则静默跳过）
+                    container.ttsManager.speak(assistant, com.meapet.mobile.tts.TtsManager.Source.OVERLAY)
                 },
                 onFailure = { e ->
                     Log.w(TAG, "Overlay send failed: ${e.message}")

@@ -21,6 +21,8 @@ val devName: String = localProperties.getProperty("app.devName", "") ?: ""
 val gitRepoUrl: String = localProperties.getProperty("app.gitRepoUrl", "") ?: ""
 val qqGroupUrl: String = localProperties.getProperty("app.qqGroupUrl", "") ?: ""
 val umengPolicyUrl: String = localProperties.getProperty("app.umengPolicyUrl", "") ?: ""
+// TTS 模型下载地址（开源分叉时按需替换；缺省为空表示未配置，设置里下载入口将提示）
+val ttsModelBaseUrl: String = localProperties.getProperty("app.ttsModelBaseUrl", "") ?: ""
 
 android {
     namespace = "com.meapet.mobile"
@@ -35,12 +37,12 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode =  9
-        versionName = "1.5.0"
+        versionName = "1.6.0-beta1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 
         // 友盟 AppKey 通过 BuildConfig 注入，源码中不硬编码
@@ -52,6 +54,7 @@ android {
         buildConfigField("String", "GIT_REPO_URL", "\"$gitRepoUrl\"")
         buildConfigField("String", "QQ_GROUP_URL", "\"$qqGroupUrl\"")
         buildConfigField("String", "UMENG_POLICY_URL", "\"$umengPolicyUrl\"")
+        buildConfigField("String", "TTS_MODEL_BASE_URL", "\"$ttsModelBaseUrl\"")
     }
 
     buildTypes {
@@ -74,11 +77,30 @@ android {
         compose = true
         buildConfig = true
     }
+    // 原生 libonnxruntime.so 改为运行时按需下载（减小 APK），故此处排除 AAR 内嵌的 .so；
+    // 仅保留 onnxruntime-android 的 Java/JNI 绑定层（libonnxruntime4j_jni.so 体积很小）。
+    packaging {
+        jniLibs {
+            excludes += "lib/**/libonnxruntime.so"
+        }
+    }
+    // OpenJTalk 词典/拼音表等大文本 assets 需禁压缩（否则 aapt 压缩后某些读取路径会失败）
+    aaptOptions {
+        noCompress += listOf("bin", "dic", "txt")
+    }
     testOptions {
         unitTests {
             // JVM 单测中 android.util.Log 等桩方法返回默认值而非抛异常
             isReturnDefaultValues = true
         }
+    }
+}
+
+// Kotlin JVM target 显式对齐 Java 11（与上方 compileOptions 保持一致，
+// 防止依赖某侧默认值漂移导致 bytecode 版本不一致）
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
 
@@ -113,6 +135,9 @@ dependencies {
     // 友盟+ 统计 SDK (U-APP)
     implementation(libs.umeng.umsdk.common)  // 必选：统计核心
     implementation(libs.umeng.umsdk.asms)    // 必选：重要组件
+
+    // 本地 VITS TTS：ONNX Runtime（Java 绑定；原生 libonnxruntime.so 运行时按需下载，见 TtsModelManager）
+    implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

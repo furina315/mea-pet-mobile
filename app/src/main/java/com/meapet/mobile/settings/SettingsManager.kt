@@ -70,6 +70,9 @@ class SettingsManager(context: Context) {
     private val KEY_ENABLE_DYNAMIC_COLOR = booleanPreferencesKey(SettingsKeys.ENABLE_DYNAMIC_COLOR)
     private val KEY_COLOR_PRESET = stringPreferencesKey(SettingsKeys.COLOR_PRESET)
     private val KEY_FIRST_LAUNCH = booleanPreferencesKey(SettingsKeys.FIRST_LAUNCH)
+    private val KEY_TTS_MAIN_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_MAIN_ENABLED)
+    private val KEY_TTS_OVERLAY_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_OVERLAY_ENABLED)
+    private val KEY_TTS_LENGTH_SCALE = doublePreferencesKey(SettingsKeys.TTS_LENGTH_SCALE)
 
     // ── Flows (响应式订阅) ────────────────────────────
 
@@ -138,6 +141,21 @@ class SettingsManager(context: Context) {
         prefs[KEY_FIRST_LAUNCH] ?: true
     }
 
+    /** 主界面语音开关流。 */
+    val ttsMainEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_TTS_MAIN_ENABLED] ?: SettingsKeys.Defaults.TTS_MAIN_ENABLED
+    }
+
+    /** 悬浮窗语音开关流。 */
+    val ttsOverlayEnabledFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_TTS_OVERLAY_ENABLED] ?: SettingsKeys.Defaults.TTS_OVERLAY_ENABLED
+    }
+
+    /** 语速流（length_scale，1.0 原速）。 */
+    val ttsLengthScaleFlow: Flow<Double> = dataStore.data.map { prefs ->
+        prefs[KEY_TTS_LENGTH_SCALE] ?: SettingsKeys.Defaults.TTS_LENGTH_SCALE
+    }
+
     // ── 同步 getter（非 Flow 场景使用，如 Client 构造）──
     // 读取内存快照，正常路径无磁盘 IO；快照未就绪时短暂 runBlocking 读一次兜底
 
@@ -165,6 +183,15 @@ class SettingsManager(context: Context) {
 
     /** 距上次摘要已进行的对话轮数（跨进程存活，见 [SettingsKeys.EXCHANGE_COUNT]）。 */
     fun getExchangeCount(): Int = currentPrefs()[KEY_EXCHANGE_COUNT] ?: 0
+
+    /** 主界面语音开关。 */
+    fun isTtsMainEnabled(): Boolean = currentPrefs()[KEY_TTS_MAIN_ENABLED] ?: SettingsKeys.Defaults.TTS_MAIN_ENABLED
+
+    /** 悬浮窗语音开关。 */
+    fun isTtsOverlayEnabled(): Boolean = currentPrefs()[KEY_TTS_OVERLAY_ENABLED] ?: SettingsKeys.Defaults.TTS_OVERLAY_ENABLED
+
+    /** 语速（length_scale，1.0 原速）。 */
+    fun getTtsLengthScale(): Double = currentPrefs()[KEY_TTS_LENGTH_SCALE] ?: SettingsKeys.Defaults.TTS_LENGTH_SCALE
 
     // ── 写入方法 ──────────────────────────────────────
     // edit 返回写入后的最新快照，随手更新缓存，保证同步 getter 读己之写
@@ -225,6 +252,18 @@ class SettingsManager(context: Context) {
 
     suspend fun markFirstLaunchDone() {
         cachedPrefs = dataStore.edit { prefs -> prefs[KEY_FIRST_LAUNCH] = false }
+    }
+
+    suspend fun setTtsMainEnabled(enabled: Boolean) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_TTS_MAIN_ENABLED] = enabled }
+    }
+
+    suspend fun setTtsOverlayEnabled(enabled: Boolean) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_TTS_OVERLAY_ENABLED] = enabled }
+    }
+
+    suspend fun setTtsLengthScale(scale: Double) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_TTS_LENGTH_SCALE] = scale }
     }
 
     /** 清除所有设置（恢复出厂）。 */

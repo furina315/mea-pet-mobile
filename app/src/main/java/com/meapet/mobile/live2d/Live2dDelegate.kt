@@ -32,6 +32,17 @@ class Live2dDelegate private constructor() {
         @Volatile
         private var instance: Live2dDelegate? = null
 
+        /**
+         * TTS 语音停止回调（互斥：触摸语音响起时停掉 TTS）。
+         * 由 app 容器注入，避免 live2d 包反向依赖 TTS。
+         */
+        @Volatile
+        var ttsStopper: (() -> Unit)? = null
+
+        /** TTS 是否正在播放（触摸语音触发时用于决定是否先停 TTS）。 */
+        @Volatile
+        var ttsPlayingChecker: (() -> Boolean)? = null
+
         fun getInstance(): Live2dDelegate {
             return instance ?: synchronized(this) {
                 instance ?: Live2dDelegate().also { instance = it }
@@ -59,8 +70,6 @@ class Live2dDelegate private constructor() {
     var windowHeight = 0
         private set
 
-    @Volatile
-    private var isActive = false
     private var isCaptured = false
 
     /** 触摸分区是否启用（设置页内禁用，防止穿透触发语音）。 */
@@ -93,7 +102,6 @@ class Live2dDelegate private constructor() {
     fun onStart(activity: Activity) {
         this._activity = activity
         this._appContext = activity.applicationContext
-        isActive = true
     }
 
     fun onStop() { /* no-op */ }
@@ -111,7 +119,6 @@ class Live2dDelegate private constructor() {
     fun onActivityDestroyed(activity: Activity) {
         if (_activity === activity) {
             _activity = null
-            isActive = false
         }
     }
 
@@ -185,10 +192,6 @@ class Live2dDelegate private constructor() {
         } catch (e: Exception) {
             Log.e(TAG, "Render error: ${e.message}")
         }
-
-        if (!isActive) {
-            _activity?.finishAndRemoveTask()
-        }
     }
 
     // ── 触摸跟随 ──
@@ -226,8 +229,10 @@ class Live2dDelegate private constructor() {
     private var touchDownY = 0f
     private var touchDownTime = 0L
 
-    /** 已创建的 VoicePlayer 缓存，按子目录 key 存储，复用同一个播放器。 */
-    private val voicePlayers = mutableMapOf<String, VoicePlayer>()
+    /** 已创建的 VoicePlayer 缓存，按子目录 key 存储，复用同一个播放器。
+     *  用 ConcurrentHashMap：ensureVoicePlayer 在 GL 线程（触摸事件），
+     *  stopTouchVoices 经 TtsManager 在协程线程，两线程并发访问需线程安全容器。 */
+    private val voicePlayers = java.util.concurrent.ConcurrentHashMap<String, VoicePlayer>()
 
     /** 获取或创建 VoicePlayer（需要 Context，在 onStart 后可用）。 */
     private fun ensureVoicePlayer(dir: String): VoicePlayer? {
@@ -240,6 +245,9 @@ class Live2dDelegate private constructor() {
     private fun stopAllVoices() {
         voicePlayers.values.forEach { it.stop() }
     }
+
+    /** 供外部（TTS 互斥）停止所有触摸语音。 */
+    fun stopTouchVoices() = stopAllVoices()
 
     /** 判断是否为轻触（非拖动）。阈值：移动≤30px、时长≤400ms。 */
     private fun isTap(x: Float, y: Float): Boolean {
@@ -293,6 +301,8 @@ class Live2dDelegate private constructor() {
             val zone = detectZone(x, y)
             if (zone != null) {
                 val (text, dir, file) = zone
+                // 互斥：TTS 正在朗读时先停掉，再播触摸语音
+                if (ttsPlayingChecker?.invoke() == true) ttsStopper?.invoke()
                 // 先停止所有正在播放的语音（包括其他分区的），再播放新语音
                 stopAllVoices()
                 ensureVoicePlayer(dir)?.play(file)

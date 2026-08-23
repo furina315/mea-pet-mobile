@@ -89,6 +89,7 @@ import com.meapet.mobile.viewmodel.SettingsUiState
 import com.meapet.mobile.viewmodel.SettingsViewModel
 import com.meapet.mobile.settings.SettingsKeys
 
+
 // ── 视觉常量（语义命名，避免魔法数字） ──────────────────
 
 /** 顶栏半透明背景 alpha。 */
@@ -122,6 +123,13 @@ private val MAX_TOKENS_RANGE = 256f..8192f
 private const val MAX_TOKENS_STEPS = 30
 private val SUMMARY_INTERVAL_RANGE = 3f..30f
 private const val SUMMARY_INTERVAL_STEPS = 26
+
+/**
+ * 语速滑杆：显示/拖动的是「语速倍率 speed」（0.5=半速慢、2.0=双倍速快），
+ * 与内部 `length_scale`（<1 快、>1 慢）互为倒数。steps=14 → 0.5..2.0 间 0.1 步进。
+ */
+private val TTS_SPEED_RANGE = 0.5f..2.0f
+private const val TTS_SPEED_STEPS = 14
 
 /** 失焦时保存的扩展（统一 onFocusChanged 样板）。 */
 private fun Modifier.saveOnFocusChange(action: () -> Unit): Modifier =
@@ -189,6 +197,7 @@ fun SettingsScreen(
             ModelParamsSection(state, settingsViewModel, local, darkTheme)
             SystemPromptSection(settingsViewModel, local)
             MemorySection(state, settingsViewModel, local, darkTheme)
+            TtsSection(state, settingsViewModel, darkTheme)
             ThemeSection(state, settingsViewModel, darkTheme)
             PrivacySection(state, settingsViewModel, onOpenPrivacyPolicy, onExitApp)
 
@@ -449,6 +458,9 @@ private fun SystemPromptSection(
 ) {
     SectionTitle("System Prompt")
 
+    // 内联二次确认：true=已变「确认恢复？」等待再次点击
+    var confirmReset by remember { mutableStateOf(false) }
+
     Column {
         OutlinedTextField(
             value = local.systemPrompt,
@@ -462,17 +474,34 @@ private fun SystemPromptSection(
 
         Spacer(Modifier.height(8.dp))
 
-        // ★ 新增：恢复默认按钮
+        // 恢复默认：首次点击变红字「确认恢复？」，再次点击才执行；失焦/超时自动还原
         OutlinedButton(
             onClick = {
-                // 1. 立即更新本地编辑状态（文本框内容瞬间变化）
-                local.systemPrompt = SettingsKeys.Defaults.SYSTEM_PROMPT
-                // 2. 异步写入 DataStore
-                viewModel.resetSystemPrompt()
+                if (confirmReset) {
+                    confirmReset = false
+                    // 1. 立即更新本地编辑状态（文本框内容瞬间变化）
+                    local.systemPrompt = SettingsKeys.Defaults.SYSTEM_PROMPT
+                    // 2. 异步写入 DataStore
+                    viewModel.resetSystemPrompt()
+                } else {
+                    confirmReset = true
+                }
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("恢复默认")
+            Text(
+                text = if (confirmReset) "确认恢复？" else "恢复默认",
+                color = if (confirmReset) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+
+    // 确认状态 3 秒无操作自动还原，避免误留
+    LaunchedEffect(confirmReset) {
+        if (confirmReset) {
+            kotlinx.coroutines.delay(3000)
+            confirmReset = false
         }
     }
 }
@@ -528,8 +557,169 @@ private fun MemorySection(
     )
 }
 
-/** 主题：模式选择 + 动态颜色开关 + 颜色预设。 */
+/** 语音：模型下载管理 + 主/悬浮窗开关 + 默认语音 + 语速。 */
 @Composable
+private fun TtsSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    darkTheme: Boolean
+) {
+    SectionTitle("语音")
+
+    val modelReady = state.ttsModelState is com.meapet.mobile.tts.model.TtsModelState.Ready
+
+    // ── 语音模型管理 ──
+    TtsModelCard(state, viewModel)
+
+    Spacer(Modifier.height(8.dp))
+
+    // ── 发声开关（模型未就绪时置灰）──
+    SettingsSwitchRow(
+        label = "主界面语音",
+        description = if (modelReady) "对话回复在主界面朗读" else "需先下载语音模型",
+        checked = state.ttsMainEnabled && modelReady,
+        darkTheme = darkTheme,
+        onCheckedChange = { viewModel.updateTtsMainEnabled(it) },
+        enabled = modelReady
+    )
+    SettingsSwitchRow(
+        label = "悬浮窗语音",
+        description = if (modelReady) "悬浮窗回复朗读" else "需先下载语音模型",
+        checked = state.ttsOverlayEnabled && modelReady,
+        darkTheme = darkTheme,
+        onCheckedChange = { viewModel.updateTtsOverlayEnabled(it) },
+        enabled = modelReady
+    )
+
+    // ── 语速 ──
+    // 内部存的是 length_scale（<1 快、>1 慢）；滑杆显示/拖动的是语速倍率 speed = 1/length_scale
+    // （0.5=半速、1.0=原速、2.0=双倍速），方向符合直觉。
+    // 用本地 remember 状态拖动（顺滑，不随 DataStore 流回环），松手才落盘。
+    val lengthScale = state.ttsLengthScale.toFloat().coerceIn(0.5f, 2.0f)
+    var speed by remember {
+        mutableStateOf((1f / lengthScale).coerceIn(0.5f, 2.0f))
+    }
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "语速: ${"%.2f".format(speed)}x",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (modelReady) 1f else 0.5f)
+    )
+    Slider(
+        value = speed,
+        onValueChange = { speed = it },
+        onValueChangeFinished = {
+            // speed（0.5..2.0）→ length_scale = 1/speed；取整到 0.01，避免 1/0.6=1.6667 这类
+            // 非 0.1 对齐值，保证下次进页面显示不回跳。
+            val lengthScale = kotlin.math.round((1f / speed) * 100) / 100.0
+            viewModel.updateTtsLengthScale(lengthScale)
+        },
+        valueRange = TTS_SPEED_RANGE,
+        steps = TTS_SPEED_STEPS,
+        enabled = modelReady,
+        modifier = Modifier.fillMaxWidth(),
+        colors = SliderDefaults.colors(inactiveTrackColor = sliderTrackColor(darkTheme))
+    )
+}
+
+/** 语音模型下载状态卡：状态显示 + 下载/进度/删除。 */
+@Composable
+private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            when (val st = state.ttsModelState) {
+                is com.meapet.mobile.tts.model.TtsModelState.Ready -> {
+                    Text("语音模型已就绪", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "模型与运行库已下载，语音功能可用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { viewModel.deleteTtsModel() }) {
+                        Text("删除模型")
+                    }
+                }
+                is com.meapet.mobile.tts.model.TtsModelState.Downloading -> {
+                    Text("正在下载语音模型…", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        st.currentFile,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressLike(progress = st.progress)
+                }
+                is com.meapet.mobile.tts.model.TtsModelState.Error -> {
+                    Text("下载失败", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        st.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(onClick = { viewModel.downloadTtsModel() }) { Text("重试") }
+                }
+                is com.meapet.mobile.tts.model.TtsModelState.NotDownloaded -> {
+                    Text("语音模型未下载", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        if (state.ttsModelUrlConfigured) "约 92MB（模型 + 运行库），下载后开放语音功能"
+                        else "未配置模型下载地址",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.downloadTtsModel() },
+                        enabled = state.ttsModelUrlConfigured
+                    ) { Text("下载模型") }
+                }
+            }
+        }
+    }
+}
+
+/** 轻量进度条（包一层避免引入额外 import 差异）。 */
+@Composable
+private fun LinearProgressLike(progress: Float) {
+    androidx.compose.material3.LinearProgressIndicator(
+        progress = { progress.coerceIn(0f, 1f) },
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+/** 轻量选择片（替代 FilterChip，保持现有视觉风格）。 */
+@Composable
+private fun FilterChipLike(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable(enabled = enabled) { onClick() },
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(20.dp),
+        border = if (selected) androidx.compose.foundation.BorderStroke(
+            1.dp, MaterialTheme.colorScheme.primary
+        ) else null
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+        )
+    }
+}
+
+/** 主题：模式选择 + 动态颜色开关 + 颜色预设。 */@Composable
 private fun ThemeSection(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
@@ -616,7 +806,43 @@ private fun PrivacySection(
 
     Spacer(Modifier.height(8.dp))
 
-    // 友盟统计数据采集授权状态
+    // 导出日志（拉起系统分享，发给开发者排查问题）
+    val exportingLog by viewModel.exportingLog.collectAsState()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !exportingLog) { viewModel.exportLog() },
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (exportingLog) "正在导出日志…" else "导出日志",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            if (exportingLog) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .size(20.dp)
+                        .graphicsLayer { rotationZ = 180f }
+                )
+            }
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(

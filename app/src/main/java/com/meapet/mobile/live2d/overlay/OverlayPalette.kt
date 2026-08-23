@@ -17,8 +17,10 @@ import com.meapet.mobile.settings.SettingsManager
  * 主题（颜色预设 / 动态取色 / 明暗模式），按 ui/theme/Color.kt 相同的 seed 派生规则
  * 还原菜单、气泡、输入栏用到的几个颜色，保证悬浮窗与主界面观感一致。
  *
- * 动态取色（Material You，Android 12+）在无窗口 token 的 Service 里拿不到系统动态配色，
- * 退而读取壁纸主色（[WallpaperManager.getWallpaperColors]）近似；拿不到则回退所选预设。
+ * 动态取色（Material You，Android 12+）：主界面用 `dynamicLight/DarkColorScheme`，
+ * 悬浮窗无窗口 token，改读系统动态色资源 `android.R.color.system_accent1_*`
+ * （与系统 Material You 色板同源），取 accent1_600（浅）/ accent1_200（深）作 seed；
+ * 读不到（部分 ROM 阉割）再回退壁纸主色、最终回退所选预设。
  */
 object OverlayPalette {
 
@@ -46,16 +48,35 @@ object OverlayPalette {
         val themeMode = settings.getThemeMode()
         val presetId = settings.getColorPreset()
         val dynamicOn = settings.isDynamicColorEnabled()
+        val dark = isDarkTheme(context, themeMode)
 
-        // 动态取色（Android 12+）：用壁纸主色近似 Material You 动态配色
+        // 动态取色（Android 12+）：优先系统动态色资源（与主界面 dynamicColorScheme 同源），
+        // 读不到再用壁纸主色近似，最终回退所选预设
         val seed = if (dynamicOn && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            wallpaperSeed(context) ?: (PRESET_SEEDS[presetId] ?: PRESET_SEEDS.getValue("default"))
+            systemDynamicSeed(context, dark)
+                ?: wallpaperSeed(context)
+                ?: (PRESET_SEEDS[presetId] ?: PRESET_SEEDS.getValue("default"))
         } else {
             PRESET_SEEDS[presetId] ?: PRESET_SEEDS.getValue("default")
         }
 
-        val dark = isDarkTheme(context, themeMode)
         return if (dark) darkColors(seed) else lightColors(seed)
+    }
+
+    /**
+     * 系统动态色（Material You）：读 `android.R.color.system_accent1_*`。
+     * 浅色取 accent1_600、深色取 accent1_200（与 dynamicColorScheme 的 primary 明度接近）。
+     * 返回 null 表示该 ROM 未提供（部分国产 ROM 阉割了动态色资源）。
+     */
+    @SuppressLint("NewApi")
+    private fun systemDynamicSeed(context: Context, dark: Boolean): Int? {
+        return try {
+            val resId = if (dark) android.R.color.system_accent1_200
+                        else android.R.color.system_accent1_600
+            context.getColor(resId)
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** 壁纸主色（依次取 primary → secondary → tertiary）。仅 API S+ 调用（动态取色分支已检查）。 */

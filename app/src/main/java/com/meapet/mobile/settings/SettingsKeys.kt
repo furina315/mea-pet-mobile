@@ -28,6 +28,11 @@ object SettingsKeys {
     const val COLOR_PRESET = "color_preset"  // "default" | "ocean" | "forest" | "sunset" | "rose" | "mono"
     const val FIRST_LAUNCH = "first_launch"
 
+    // ── TTS 语音 ─────────────────────────────────────
+    const val TTS_MAIN_ENABLED = "tts_main_enabled"        // 主界面语音开关
+    const val TTS_OVERLAY_ENABLED = "tts_overlay_enabled"  // 悬浮窗语音开关
+    const val TTS_LENGTH_SCALE = "tts_length_scale"        // 语速：0.5~2.0，1.0 为原速
+
     /** 合理的默认值。 */
     object Defaults {
         const val API_URL = "https://api.deepseek.com/v1"
@@ -42,5 +47,10 @@ object SettingsKeys {
         const val THEME_MODE = "system"
         const val ENABLE_DYNAMIC_COLOR = true
         const val COLOR_PRESET = "default"
+
+        // TTS
+        const val TTS_MAIN_ENABLED = false
+        const val TTS_OVERLAY_ENABLED = false
+        const val TTS_LENGTH_SCALE = 1.0
     }
 }

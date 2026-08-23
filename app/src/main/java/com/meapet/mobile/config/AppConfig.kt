@@ -22,6 +22,7 @@ package com.meapet.mobile.config
  * @property enableMemory 是否启用记忆系统
  * @property enableAutoSummary 是否自动摘要对话为长期记忆
  * @property appVersion 应用版本名
+ * @property ttsModelBaseUrl TTS 模型下载基础地址（BuildConfig 注入）
  */
 data class AppConfig(
     val defaultApiUrl: String = "https://api.deepseek.com",
@@ -36,10 +37,27 @@ data class AppConfig(
     val memoryOpsEchoTurns: Int = 3,
     val enableMemory: Boolean = true,
     val enableAutoSummary: Boolean = true,
-    val appVersion: String = "1.0.0"
+    val appVersion: String = "1.0.0",
+    /**
+     * TTS 模型下载基础地址（4 个 onnx + 原生库所在目录，尾部不带文件名）。
+     * 经 BuildConfig 从 local.properties 注入；空 = 未配置，下载入口提示。
+     */
+    val ttsModelBaseUrl: String = ""
 ) {
     companion object {
         /** 合理的生产默认值。各模块可通过 AppContainer 的 config 属性访问。 */
         val DEFAULT = AppConfig()
+
+        /**
+         * 从 BuildConfig 注入的地址构建配置（在 AppContainer 初始化时调用）。
+         * local.properties 缺失时对应字段为空字符串，下载入口据此提示未配置。
+         */
+        fun fromBuildConfig(
+            ttsModelBaseUrl: String,
+            appVersion: String
+        ): AppConfig = DEFAULT.copy(
+            ttsModelBaseUrl = ttsModelBaseUrl,
+            appVersion = appVersion
+        )
     }
 }

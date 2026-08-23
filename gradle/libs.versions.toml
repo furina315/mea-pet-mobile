@@ -16,6 +16,7 @@ kotlinxCoroutines = "1.9.0"
 mockitoKotlin = "5.4.0"
 umengCommon = "9.9.2"
 umengAsms = "1.8.7.2"
+onnxruntime = "1.23.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,7 +35,7 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-compose-material-icons = { group = "androidx.compose.material", name = "material-icons-core" }
+androidx-compose-material-icons = { group = "androidx.compose.material", name = "material-icons-extended" }
 
 # Ktor Client
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
@@ -55,6 +56,9 @@ mockito-kotlin = { module = "org.mockito.kotlin:mockito-kotlin", version.ref = "
 # 友盟+ 统计 SDK (U-APP)
 umeng-umsdk-common = { group = "com.umeng.umsdk", name = "common", version.ref = "umengCommon" }  # 必选
 umeng-umsdk-asms = { group = "com.umeng.umsdk", name = "asms", version.ref = "umengAsms" }        # 必选
+
+# ONNX Runtime（本地 VITS TTS 推理）
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

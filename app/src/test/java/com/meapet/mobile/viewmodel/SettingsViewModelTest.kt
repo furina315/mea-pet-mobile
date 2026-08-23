@@ -2,7 +2,10 @@ package com.meapet.mobile.viewmodel
 
 import com.meapet.mobile.app.AppContainer
 import com.meapet.mobile.app.MeaPetApplication
+import com.meapet.mobile.config.AppConfig
 import com.meapet.mobile.settings.SettingsManager
+import com.meapet.mobile.tts.model.TtsModelManager
+import com.meapet.mobile.tts.model.TtsModelState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +49,7 @@ class SettingsViewModelTest {
     private lateinit var application: MeaPetApplication
     private lateinit var container: AppContainer
     private lateinit var settingsManager: SettingsManager
+    private lateinit var ttsModelManager: TtsModelManager
 
     @Before
     fun setUp() {
@@ -53,10 +57,13 @@ class SettingsViewModelTest {
         application = mock()
         container = mock()
         settingsManager = mock()
+        ttsModelManager = mock()
 
         // container 经 doReturn 注入（by lazy 属性）
         Mockito.doReturn(container).`when`(application).container
         Mockito.doReturn(settingsManager).`when`(container).settingsManager
+        Mockito.doReturn(ttsModelManager).`when`(container).ttsModelManager
+        Mockito.doReturn(AppConfig.DEFAULT).`when`(container).config
 
         // 设置 getter（initialState 同步读取）
         whenever(settingsManager.getApiKey()).thenReturn("")
@@ -68,6 +75,12 @@ class SettingsViewModelTest {
         whenever(settingsManager.isMemoryEnabled()).thenReturn(true)
         whenever(settingsManager.isAutoSummaryEnabled()).thenReturn(true)
         whenever(settingsManager.getSummaryInterval()).thenReturn(10)
+        whenever(settingsManager.isTtsMainEnabled()).thenReturn(false)
+        whenever(settingsManager.isTtsOverlayEnabled()).thenReturn(false)
+        whenever(settingsManager.getTtsLengthScale()).thenReturn(1.0)
+
+        // TTS 模型管理器（state 流）
+        whenever(ttsModelManager.state).thenReturn(MutableStateFlow(TtsModelState.NotDownloaded))
 
         // 全部设置 Flow（init 订阅）
         whenever(settingsManager.apiKeyFlow).thenReturn(MutableStateFlow(""))
@@ -82,6 +95,9 @@ class SettingsViewModelTest {
         whenever(settingsManager.themeModeFlow).thenReturn(MutableStateFlow("system"))
         whenever(settingsManager.enableDynamicColorFlow).thenReturn(MutableStateFlow(true))
         whenever(settingsManager.colorPresetFlow).thenReturn(MutableStateFlow("default"))
+        whenever(settingsManager.ttsMainEnabledFlow).thenReturn(MutableStateFlow(false))
+        whenever(settingsManager.ttsOverlayEnabledFlow).thenReturn(MutableStateFlow(false))
+        whenever(settingsManager.ttsLengthScaleFlow).thenReturn(MutableStateFlow(1.0))
     }
 
     @After

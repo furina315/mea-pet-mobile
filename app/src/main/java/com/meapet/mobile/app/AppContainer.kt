@@ -3,6 +3,7 @@ package com.meapet.mobile.app
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.util.Log
+import com.meapet.mobile.BuildConfig
 import com.meapet.mobile.client.KtorHttpClientEngine
 import com.meapet.mobile.client.OpenAiCompatibleClient
 import com.meapet.mobile.chat.ChatService
@@ -15,6 +16,13 @@ import com.meapet.mobile.memory.MemoryManager
 import com.meapet.mobile.memory.MemoryRepository
 import com.meapet.mobile.memory.MemoryService
 import com.meapet.mobile.settings.SettingsManager
+import com.meapet.mobile.tts.TtsManager
+import com.meapet.mobile.tts.TtsSynthesizer
+import com.meapet.mobile.tts.VitsOnnxEngine
+import com.meapet.mobile.tts.audio.TtsAudioPlayer
+import com.meapet.mobile.tts.g2p.ChineseG2p
+import com.meapet.mobile.tts.g2p.G2pProcessor
+import com.meapet.mobile.tts.model.TtsModelManager
 import com.meapet.mobile.update.UpdateChecker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +58,10 @@ import kotlinx.coroutines.launch
  */
 class AppContainer(
     private val context: Context,
-    val config: AppConfig = AppConfig.DEFAULT
+    val config: AppConfig = AppConfig.fromBuildConfig(
+        ttsModelBaseUrl = BuildConfig.TTS_MODEL_BASE_URL,
+        appVersion = BuildConfig.VERSION_NAME
+    )
 ) {
     companion object {
         private const val TAG = "AppContainer"
@@ -140,6 +151,49 @@ class AppContainer(
         )
     }
 
+    // ── TTS 语音 ──────────────────────────────────────
+
+    /** TTS 模型/词典下载与状态管理。 */
+    val ttsModelManager: TtsModelManager by lazy {
+        TtsModelManager(context)
+    }
+
+    /** VITS 四模块 ONNX 推理引擎（懒加载 73MB 权重）。 */
+    private val vitsEngine: VitsOnnxEngine by lazy {
+        VitsOnnxEngine(ttsModelManager)
+    }
+
+    /** G2P 编排：中文走拼音映射。 */
+    private val g2pProcessor: G2pProcessor by lazy {
+        G2pProcessor(chinese = ChineseG2p(context))
+    }
+
+    /** TTS 门面：开关判断、整段合成播放。 */
+    val ttsManager: TtsManager by lazy {
+        TtsManager(
+            settingsManager = settingsManager,
+            modelManager = ttsModelManager,
+            synthesizer = TtsSynthesizer(vitsEngine, g2pProcessor),
+            player = TtsAudioPlayer(),
+            scope = applicationScope
+        ).also { wireVoiceMutex() }
+    }
+
+    /**
+     * 接线触摸语音 ↔ TTS 互斥（经 Live2dDelegate 的进程级 hook，避免包间反向依赖）：
+     * - 触摸语音触发时若 TTS 在播，先停 TTS；
+     * - TTS 开始播放时停掉未完触摸语音。
+     */
+    private fun wireVoiceMutex() {
+        // 触摸语音触发时若 TTS 在播，先停 TTS
+        com.meapet.mobile.live2d.Live2dDelegate.ttsPlayingChecker = { ttsManager.isPlaying.value }
+        com.meapet.mobile.live2d.Live2dDelegate.ttsStopper = { ttsManager.stop() }
+        // TTS 开始播放时停掉未完的触摸语音
+        TtsManager.onPlaybackStart = {
+            com.meapet.mobile.live2d.Live2dDelegate.getInstance().stopTouchVoices()
+        }
+    }
+
     // ── 启动预热 ──────────────────────────────────────
 
     /**
@@ -156,7 +210,16 @@ class AppContainer(
         warmUpJob = applicationScope.launch(Dispatchers.IO) {
             listOf(
                 launch { memoryRepository.loadFromDisk() },
-                launch { conversationManager.restore(conversationStore.load()) }
+                launch { conversationManager.restore(conversationStore.load()) },
+                // Live2D 模型文件预读到内存缓存：模型加载在 GL 线程同步执行，
+                // asset 读取是最大耗时（阻塞主线程 onPause 数秒）。预热后 GL 线程
+                // 只做解析 + GL 上传，启动/切前后台不再长时间卡顿。
+                launch {
+                    runCatching {
+                        com.meapet.mobile.live2d.Live2dManager.getInstance()
+                            .prewarmModel(context)
+                    }.onFailure { Log.w(TAG, "Live2D 模型预热失败", it) }
+                }
             ).joinAll()
         }
     }

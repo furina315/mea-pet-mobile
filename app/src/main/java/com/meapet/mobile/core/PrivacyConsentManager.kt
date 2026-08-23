@@ -2,11 +2,14 @@ package com.meapet.mobile.core
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import com.meapet.mobile.settings.appDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 /**
  * 隐私授权管理器。
@@ -20,9 +23,13 @@ import kotlinx.coroutines.flow.map
  */
 object PrivacyConsentManager {
 
+    private const val TAG = "PrivacyConsentManager"
     private const val PREFS_NAME = "privacy_consent"
     private const val KEY_AGREED = "umeng_privacy_agreed"
     private const val KEY_USER_CHOSEN = "privacy_user_chosen"
+
+    /** DataStore 同步写入的超时上限（毫秒）：授权弹窗点击路径，给磁盘繁忙留余量但防无限阻塞。 */
+    private const val DATASTORE_WRITE_TIMEOUT_MS = 2000L
 
     private val KEY_DS_AGREED = booleanPreferencesKey("umeng_privacy_agreed")
 
@@ -50,9 +57,17 @@ object PrivacyConsentManager {
             .putBoolean(KEY_AGREED, agreed)
             .putBoolean(KEY_USER_CHOSEN, true)
             .commit()
-        // 同步写入 DataStore 供 Flow 订阅
-        kotlinx.coroutines.runBlocking {
-            context.appDataStore.edit { it[KEY_DS_AGREED] = agreed }
+        // 同步写入 DataStore 供 Flow 订阅。此调用发生在用户点击授权弹窗按钮时
+        // （非冷启动热路径），加超时上限避免异常情况下无限阻塞主线程；
+        // 授权状态以上面的 SharedPreferences 为准，DataStore 超时写失败不影响授权判断。
+        try {
+            runBlocking {
+                withTimeout(DATASTORE_WRITE_TIMEOUT_MS) {
+                    context.appDataStore.edit { it[KEY_DS_AGREED] = agreed }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "DataStore 写入授权状态超时/失败（已忽略，以 SharedPreferences 为准）", e)
         }
     }
 }

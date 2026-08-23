@@ -9,6 +9,7 @@ import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.memory.MemoryItem
 import com.meapet.mobile.memory.MemoryManager
 import com.meapet.mobile.memory.MemoryStats
+import com.meapet.mobile.tts.TtsManager
 import com.meapet.mobile.update.UpdateCheckResult
 import com.meapet.mobile.update.UpdateChecker
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,7 @@ class ChatViewModelTest {
     private lateinit var chatService: ChatService
     private lateinit var memoryManager: MemoryManager
     private lateinit var updateChecker: UpdateChecker
+    private lateinit var ttsManager: TtsManager
 
     @Before
     fun setUp() {
@@ -58,10 +60,12 @@ class ChatViewModelTest {
         chatService = mock()
         memoryManager = mock()
         updateChecker = mock()
+        ttsManager = mock()
         // AppContainer 属性为 by lazy，whenever(getter) 会拿到 null；用 doReturn 直接设定
         Mockito.doReturn(chatService).`when`(container).chatService
         Mockito.doReturn(memoryManager).`when`(container).memoryManager
         Mockito.doReturn(updateChecker).`when`(container).updateChecker
+        Mockito.doReturn(ttsManager).`when`(container).ttsManager
         Mockito.doReturn(Job().apply { complete() }).`when`(container).warmUpJob
         wheneverBlocking { updateChecker.check() }.thenReturn(UpdateCheckResult.UpToDate("1.0.0"))
         wheneverBlocking { memoryManager.getStats() }.thenReturn(MemoryStats())
@@ -119,6 +123,55 @@ class ChatViewModelTest {
 
         verify(chatService).clearHistory()
         assertTrue(vm.state.value.messages.isEmpty())
+    }
+
+    @Test
+    fun `reloadHistory 丢弃被窗口裁剪的旧消息避免拼到末尾`() = runTest(dispatcher.scheduler) {
+        // 模拟长对话：当前 UI 内存里已有 6 条（5 条旧 + 1 条最新）
+        val old1 = ChatMessage(role = ChatRole.user, content = "旧1")
+        val old2 = ChatMessage(role = ChatRole.assistant, content = "旧2")
+        val old3 = ChatMessage(role = ChatRole.user, content = "旧3")
+        val old4 = ChatMessage(role = ChatRole.assistant, content = "旧4")
+        val latestUser = ChatMessage(role = ChatRole.user, content = "最新")
+        val latestReply = ChatMessage(role = ChatRole.assistant, content = "回复")
+
+        // 启动时加载全量
+        whenever(chatService.getHistory()).thenReturn(
+            listOf(old1, old2, old3, old4, latestUser, latestReply)
+        )
+        val vm = ChatViewModel(application)
+        vm.advance()
+
+        // 悬浮窗期间会话被 ConversationManager 裁剪：只剩最近的 3 条（old3/old4 起）
+        whenever(chatService.getHistory()).thenReturn(
+            listOf(old3, old4, latestUser, latestReply)
+        )
+
+        vm.reloadHistory()
+
+        // 被裁剪的 old1/old2 不应被拼到末尾；结果 = 新历史（有序）+ 无多余尾巴
+        assertEquals(
+            listOf(old3, old4, latestUser, latestReply),
+            vm.state.value.messages
+        )
+    }
+
+    @Test
+    fun `reloadHistory 保留历史之后新追加的尾部消息`() = runTest(dispatcher.scheduler) {
+        // 历史：msg1/msg2 已落库；当前 UI 里在它们之后有一条未落库的系统气泡
+        val msg1 = ChatMessage(role = ChatRole.user, content = "a")
+        val msg2 = ChatMessage(role = ChatRole.assistant, content = "b")
+        val bubble = ChatMessage(role = ChatRole.system, content = "触摸提示")
+        whenever(chatService.getHistory()).thenReturn(listOf(msg1, msg2))
+        val vm = ChatViewModel(application)
+        vm.advance()
+
+        // 构造 current = [msg1, msg2, bubble]（模拟触摸气泡 append 到末尾）
+        val current = listOf(msg1, msg2, bubble)
+
+        // merge：history 尾部 msg2 之后的新消息（bubble）应保留，旧历史以 history 为准
+        val merged = vm.mergeWithHistory(listOf(msg1, msg2), current)
+        assertEquals(listOf(msg1, msg2, bubble), merged)
     }
 
     @Test

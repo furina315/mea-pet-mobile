@@ -35,8 +35,6 @@ import com.meapet.mobile.live2d.Live2dRenderer
 import com.meapet.mobile.live2d.overlay.FloatingLive2dService
 import com.meapet.mobile.ui.screen.ChatScreenContent
 import com.meapet.mobile.ui.theme.MeaPetTheme
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 /**
  * 主入口 Activity。
@@ -76,15 +74,20 @@ class MainActivity : ComponentActivity() {
 
         container = MeaPetApplication.from(applicationContext as android.app.Application)
 
-        // 设置窗口背景（防白闪）
+        // 启动即按持久化主题设定 Live2D 背景与窗口背景，让首帧直接是主题色，
+        // 避免"先浅后深"的闪烁（Compose 内 themeModeFlow 异步收集稍后才会接管，
+        // 在此之前若只靠默认值，深色主题下会先白后黑）。
+        // getThemeMode 在快照未就绪时退化为一次 runBlocking 读盘兜底（值小、量级可接受）。
         try {
-            val themeMode = runBlocking { container.settingsManager.themeModeFlow.first() }
+            val themeMode = container.settingsManager.getThemeMode()
             val isDark = isDarkTheme(this, themeMode)
-            window.setBackgroundDrawable(
-                ColorDrawable(if (isDark) 0xFF141414.toInt() else 0xFFF7F7F7.toInt())
-            )
-        } catch (_: Exception) {
-            window.setBackgroundDrawable(ColorDrawable(0xFF141414.toInt()))
+            val bg = if (isDark) intArrayOf(0x14, 0x14, 0x14) else intArrayOf(0xF7, 0xF7, 0xF7)
+            Live2dDelegate.getInstance().let { d ->
+                d.bgR = bg[0] / 255f; d.bgG = bg[1] / 255f; d.bgB = bg[2] / 255f; d.bgA = 1.0f
+            }
+            window.setBackgroundDrawable(ColorDrawable(0xFF000000.toInt() or (bg[0] shl 16) or (bg[1] shl 8) or bg[2]))
+        } catch (e: Exception) {
+            window.setBackgroundDrawable(ColorDrawable(0xFFF7F7F7.toInt()))
         }
 
         insetsController = WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -110,7 +113,7 @@ class MainActivity : ComponentActivity() {
                 val colorPreset by container.settingsManager.colorPresetFlow
                     .collectAsState(initial = "default")
 
-                // Live2D 背景色跟随主题
+                // Live2D 背景色跟随主题（onCreate 已同步预置首帧主题色，此处响应后续切换）
                 val bgColor = remember(themeMode) {
                     val isDark = isDarkTheme(this@MainActivity, themeMode)
                     if (isDark) floatArrayOf(0.08f, 0.08f, 0.08f)

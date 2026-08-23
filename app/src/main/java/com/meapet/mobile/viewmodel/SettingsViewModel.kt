@@ -11,6 +11,8 @@ import com.meapet.mobile.core.PrivacyConsentManager
 import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.settings.SettingsKeys
 import com.meapet.mobile.settings.SettingsManager
+import com.meapet.mobile.tts.model.TtsModelManager
+import com.meapet.mobile.tts.model.TtsModelState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -49,13 +51,22 @@ data class SettingsUiState(
     val appVersion: String = "",
     val availableModels: List<String> = emptyList(),
     val isLoadingModels: Boolean = false,
-    val modelsError: String? = null
+    val modelsError: String? = null,
+    // ── TTS 语音 ──
+    val ttsMainEnabled: Boolean = SettingsKeys.Defaults.TTS_MAIN_ENABLED,
+    val ttsOverlayEnabled: Boolean = SettingsKeys.Defaults.TTS_OVERLAY_ENABLED,
+    val ttsLengthScale: Double = SettingsKeys.Defaults.TTS_LENGTH_SCALE,
+    /** 模型下载状态（来自 TtsModelManager.state）。 */
+    val ttsModelState: TtsModelState = TtsModelState.NotDownloaded,
+    /** 模型下载地址是否已配置（BuildConfig 注入）；未配置时下载入口提示。 */
+    val ttsModelUrlConfigured: Boolean = false
 )
 
 open class SettingsViewModel(application: Application) : AndroidViewModel(application) {
 
     private val container = MeaPetApplication.from(application)
     private val settingsManager: SettingsManager = container.settingsManager
+    private val ttsModelManager: TtsModelManager = container.ttsModelManager
 
     private val _state = MutableStateFlow(initialState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
@@ -74,7 +85,12 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
             enableMemory = settingsManager.isMemoryEnabled(),
             enableAutoSummary = settingsManager.isAutoSummaryEnabled(),
             summaryInterval = settingsManager.getSummaryInterval(),
-            privacyAgreed = isPrivacyAgreed()
+            privacyAgreed = isPrivacyAgreed(),
+            ttsMainEnabled = settingsManager.isTtsMainEnabled(),
+            ttsOverlayEnabled = settingsManager.isTtsOverlayEnabled(),
+            ttsLengthScale = settingsManager.getTtsLengthScale(),
+            ttsModelState = ttsModelManager.state.value,
+            ttsModelUrlConfigured = container.config.ttsModelBaseUrl.isNotBlank()
         )
     }
 
@@ -94,6 +110,12 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         subscribe(settingsManager.themeModeFlow) { s, m -> s.copy(themeMode = m) }
         subscribe(settingsManager.enableDynamicColorFlow) { s, e -> s.copy(enableDynamicColor = e) }
         subscribe(settingsManager.colorPresetFlow) { s, p -> s.copy(colorPreset = p) }
+
+        // TTS 语音
+        subscribe(settingsManager.ttsMainEnabledFlow) { s, e -> s.copy(ttsMainEnabled = e) }
+        subscribe(settingsManager.ttsOverlayEnabledFlow) { s, e -> s.copy(ttsOverlayEnabled = e) }
+        subscribe(settingsManager.ttsLengthScaleFlow) { s, v -> s.copy(ttsLengthScale = v) }
+        subscribe(ttsModelManager.state) { s, st -> s.copy(ttsModelState = st) }
 
         // 隐私授权状态（响应式订阅：同意/撤销后 UI 即时反映）
         subscribe(privacyAgreedFlow()) { s, agreed ->
@@ -202,6 +224,44 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch { settingsManager.setColorPreset(preset) }
     }
 
+    // ── TTS 语音 ──────────────────────────────────────
+
+    /** 模型是否就绪（未就绪时开关应置灰）。 */
+    fun isTtsModelReady(): Boolean = ttsModelManager.state.value == TtsModelState.Ready
+
+    fun updateTtsMainEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.setTtsMainEnabled(enabled) }
+    }
+
+    fun updateTtsOverlayEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.setTtsOverlayEnabled(enabled) }
+    }
+
+    /** 切换默认语音（当前仅中文，保留接口以便后续扩展）。 */
+    fun updateTtsLengthScale(scale: Double) {
+        viewModelScope.launch { settingsManager.setTtsLengthScale(scale) }
+    }
+
+    /** 下载 TTS 模型（4 个 onnx + 当前 ABI 的原生库）。地址未配置则进入 Error 提示。 */
+    fun downloadTtsModel() {
+        viewModelScope.launch {
+            val files = ttsModelManager.buildDownloadFiles(container.config.ttsModelBaseUrl)
+            ttsModelManager.download(files)
+        }
+    }
+
+    /** 删除模型与原生库，并强制关闭两个语音开关。 */
+    fun deleteTtsModel() {
+        viewModelScope.launch {
+            // 先停播并关闭 ONNX session（73MB+ native 内存），再删磁盘文件，
+            // 避免旧 session 持有已删模型的内存映射
+            container.ttsManager.releaseEngine()
+            ttsModelManager.deleteModel()
+            settingsManager.setTtsMainEnabled(false)
+            settingsManager.setTtsOverlayEnabled(false)
+        }
+    }
+
     /**
      * 用当前表单里的 Key / URL 拉取模型列表。
      *
@@ -287,6 +347,25 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
 
     fun dismissModelsError() {
         _state.update { it.copy(modelsError = null) }
+    }
+
+    // ── 日志导出 ──────────────────────────────────────
+
+    /** 是否正在导出日志（驱动按钮 loading/禁用）。 */
+    private val _exportingLog = MutableStateFlow(false)
+    val exportingLog: StateFlow<Boolean> = _exportingLog.asStateFlow()
+
+    /** 导出本次启动以来的应用日志并拉起系统分享。 */
+    fun exportLog() {
+        if (_exportingLog.value) return
+        viewModelScope.launch {
+            _exportingLog.value = true
+            try {
+                com.meapet.mobile.core.LogExporter.exportAndShare(getApplication())
+            } finally {
+                _exportingLog.value = false
+            }
+        }
     }
 
     // ── 隐私合规 ──────────────────────────────────────

@@ -49,7 +49,6 @@ class Live2dManager private constructor() {
 
     private var modelLoaded = false
 
-    private val viewMatrix = CubismMatrix44.create()
     private val projection = CubismMatrix44.create()
 
     /** 在 GL 上下文重建时强制重新加载模型（旧上下文的纹理已失效）。 */
@@ -73,6 +72,17 @@ class Live2dManager private constructor() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load model", e)
         }
+    }
+
+    /**
+     * 启动时异步预热模型文件到内存缓存（IO 线程）。
+     *
+     * [loadModel] 在 GL 线程同步执行（onSurfaceCreated），asset 读取是最大耗时来源，
+     * 会拖住 GL 线程 → 主线程 `GLSurfaceView.onPause` 等待数秒。预热后 [Live2dPal.loadFileAsBytes]
+     * 命中缓存，GL 线程只做解析 + GL 上传，启动/切前后台不再长时间阻塞。
+     */
+    fun prewarmModel(context: android.content.Context) {
+        Live2dPal.prewarmDirectory(context, MODEL_DIR_NAME)
     }
 
     fun onUpdate() {
@@ -100,8 +110,6 @@ class Live2dManager private constructor() {
             mm.setHeight(2.4f)
             projection.scale(1.0f / aspect, 1.0f)
         }
-
-        viewMatrix.multiplyByMatrix(projection)
 
         delegate.view.preModelDraw(m)
         m.update()
