@@ -32,7 +32,6 @@ class Live2dOverlayRenderer(
     private var model: Live2dModel? = null
     private var textureManager: Live2dTextureManager? = null
     private val projection = CubismMatrix44.create()
-    private val viewMatrix = CubismMatrix44.create()
     private var winWidth = 0
     private var winHeight = 0
     private var modelLoaded = false
@@ -117,7 +116,6 @@ class Live2dOverlayRenderer(
                 projection.translateRelative(0f, -0.35f)
             }
 
-            viewMatrix.multiplyByMatrix(projection)
             m.update()
             m.draw(projection)
 

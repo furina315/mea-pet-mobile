@@ -72,7 +72,6 @@ class SettingsManager(context: Context) {
     private val KEY_FIRST_LAUNCH = booleanPreferencesKey(SettingsKeys.FIRST_LAUNCH)
     private val KEY_TTS_MAIN_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_MAIN_ENABLED)
     private val KEY_TTS_OVERLAY_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_OVERLAY_ENABLED)
-    private val KEY_TTS_LANGUAGE = stringPreferencesKey(SettingsKeys.TTS_LANGUAGE)
     private val KEY_TTS_LENGTH_SCALE = doublePreferencesKey(SettingsKeys.TTS_LENGTH_SCALE)
 
     // ── Flows (响应式订阅) ────────────────────────────
@@ -152,11 +151,6 @@ class SettingsManager(context: Context) {
         prefs[KEY_TTS_OVERLAY_ENABLED] ?: SettingsKeys.Defaults.TTS_OVERLAY_ENABLED
     }
 
-    /** 默认语音流（"ZH" | "JA"）。 */
-    val ttsLanguageFlow: Flow<String> = dataStore.data.map { prefs ->
-        prefs[KEY_TTS_LANGUAGE] ?: SettingsKeys.Defaults.TTS_LANGUAGE
-    }
-
     /** 语速流（length_scale，1.0 原速）。 */
     val ttsLengthScaleFlow: Flow<Double> = dataStore.data.map { prefs ->
         prefs[KEY_TTS_LENGTH_SCALE] ?: SettingsKeys.Defaults.TTS_LENGTH_SCALE
@@ -195,9 +189,6 @@ class SettingsManager(context: Context) {
 
     /** 悬浮窗语音开关。 */
     fun isTtsOverlayEnabled(): Boolean = currentPrefs()[KEY_TTS_OVERLAY_ENABLED] ?: SettingsKeys.Defaults.TTS_OVERLAY_ENABLED
-
-    /** 默认语音（"ZH" | "JA"）。 */
-    fun getTtsLanguage(): String = currentPrefs()[KEY_TTS_LANGUAGE] ?: SettingsKeys.Defaults.TTS_LANGUAGE
 
     /** 语速（length_scale，1.0 原速）。 */
     fun getTtsLengthScale(): Double = currentPrefs()[KEY_TTS_LENGTH_SCALE] ?: SettingsKeys.Defaults.TTS_LENGTH_SCALE
@@ -269,10 +260,6 @@ class SettingsManager(context: Context) {
 
     suspend fun setTtsOverlayEnabled(enabled: Boolean) {
         cachedPrefs = dataStore.edit { prefs -> prefs[KEY_TTS_OVERLAY_ENABLED] = enabled }
-    }
-
-    suspend fun setTtsLanguage(language: String) {
-        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_TTS_LANGUAGE] = language }
     }
 
     suspend fun setTtsLengthScale(scale: Double) {

@@ -55,7 +55,6 @@ data class SettingsUiState(
     // ── TTS 语音 ──
     val ttsMainEnabled: Boolean = SettingsKeys.Defaults.TTS_MAIN_ENABLED,
     val ttsOverlayEnabled: Boolean = SettingsKeys.Defaults.TTS_OVERLAY_ENABLED,
-    val ttsLanguage: String = SettingsKeys.Defaults.TTS_LANGUAGE,
     val ttsLengthScale: Double = SettingsKeys.Defaults.TTS_LENGTH_SCALE,
     /** 模型下载状态（来自 TtsModelManager.state）。 */
     val ttsModelState: TtsModelState = TtsModelState.NotDownloaded,
@@ -89,7 +88,6 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
             privacyAgreed = isPrivacyAgreed(),
             ttsMainEnabled = settingsManager.isTtsMainEnabled(),
             ttsOverlayEnabled = settingsManager.isTtsOverlayEnabled(),
-            ttsLanguage = settingsManager.getTtsLanguage(),
             ttsLengthScale = settingsManager.getTtsLengthScale(),
             ttsModelState = ttsModelManager.state.value,
             ttsModelUrlConfigured = container.config.ttsModelBaseUrl.isNotBlank()
@@ -116,7 +114,6 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         // TTS 语音
         subscribe(settingsManager.ttsMainEnabledFlow) { s, e -> s.copy(ttsMainEnabled = e) }
         subscribe(settingsManager.ttsOverlayEnabledFlow) { s, e -> s.copy(ttsOverlayEnabled = e) }
-        subscribe(settingsManager.ttsLanguageFlow) { s, l -> s.copy(ttsLanguage = l) }
         subscribe(settingsManager.ttsLengthScaleFlow) { s, v -> s.copy(ttsLengthScale = v) }
         subscribe(ttsModelManager.state) { s, st -> s.copy(ttsModelState = st) }
 
@@ -241,10 +238,6 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
     }
 
     /** 切换默认语音（当前仅中文，保留接口以便后续扩展）。 */
-    fun updateTtsLanguage(language: String) {
-        viewModelScope.launch { settingsManager.setTtsLanguage(language) }
-    }
-
     fun updateTtsLengthScale(scale: Double) {
         viewModelScope.launch { settingsManager.setTtsLengthScale(scale) }
     }
@@ -260,10 +253,12 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
     /** 删除模型与原生库，并强制关闭两个语音开关。 */
     fun deleteTtsModel() {
         viewModelScope.launch {
+            // 先停播并关闭 ONNX session（73MB+ native 内存），再删磁盘文件，
+            // 避免旧 session 持有已删模型的内存映射
+            container.ttsManager.releaseEngine()
             ttsModelManager.deleteModel()
             settingsManager.setTtsMainEnabled(false)
             settingsManager.setTtsOverlayEnabled(false)
-            container.ttsManager.stop()
         }
     }
 

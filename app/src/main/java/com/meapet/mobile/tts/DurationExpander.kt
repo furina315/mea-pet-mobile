@@ -15,6 +15,19 @@ import kotlin.random.Random
 object DurationExpander {
 
     /**
+     * 单个音素展开帧数上限。dp 模型输出异常值时 `exp(logw)` 可能溢出为极大数，
+     * 不钳制会导致 `yLengths` 求和后 Int 溢出变负（NegativeArraySizeException）或 OOM。
+     * 22050Hz 下 50 帧 ≈ 0.5 秒，足以覆盖任何正常音素时长。
+     */
+    private const val MAX_FRAMES_PER_PHONE = 50
+
+    /**
+     * 整段音频总帧数上限（yLengths）。超出时截断对齐路径，防止 attn 矩阵
+     * （yLengths × tX 个 Float）膨胀到 OOM。约等于 22 秒音频。
+     */
+    const val MAX_TOTAL_FRAMES = 480_000
+
+    /**
      * 步骤 3：时长展开 + 注意力路径。
      *
      * Python 原貌：
@@ -39,11 +52,27 @@ object DurationExpander {
         lengthScale: Float
     ): AttentionResult {
         val tX = logw.size
-        // w = exp(logw) * x_mask * length_scale，再取 ceil
-        val wCeil = IntArray(tX) { i -> ceil(exp(logw[i].toDouble()) * xMask[i] * lengthScale).toInt() }
+        // w = exp(logw) * x_mask * length_scale，再取 ceil。
+        // 逐音素钳制到上限：exp 溢出为 Infinity 时 toInt() 得 Int.MAX_VALUE，
+        // 必须先钳到有限值，否则求和后 Int 溢出变负（NegativeArraySizeException）。
+        val wCeil = IntArray(tX) { i ->
+            val w = exp(logw[i].toDouble()) * xMask[i] * lengthScale
+            when {
+                w.isNaN() || w <= 0.0 -> 0
+                w >= MAX_FRAMES_PER_PHONE -> MAX_FRAMES_PER_PHONE
+                else -> ceil(w).toInt()
+            }
+        }
 
+        // 累加总帧数，超上限即截断（防 attn 矩阵 OOM）
         var yLengths = 0
-        for (v in wCeil) yLengths += v
+        for (v in wCeil) {
+            yLengths += v
+            if (yLengths >= MAX_TOTAL_FRAMES) {
+                yLengths = MAX_TOTAL_FRAMES
+                break
+            }
+        }
         if (yLengths < 1) yLengths = 1
 
         // cumsum 得累计时长，逐音素把 [start:end) 置 1 构造单调对齐路径
@@ -58,6 +87,7 @@ object DurationExpander {
                 }
             }
             start += wCeil[i]
+            if (start >= yLengths) break   // 已达总帧数上限，剩余音素不再展开
         }
         return AttentionResult(attn, yLengths)
     }

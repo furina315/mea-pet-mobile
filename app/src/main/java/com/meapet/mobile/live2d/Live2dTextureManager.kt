@@ -19,16 +19,20 @@ class Live2dTextureManager {
         // Return cached texture if already loaded
         textures.find { it.filePath == filePath }?.let { return it }
 
-        val activity = Live2dDelegate.getInstance().activity ?: return null
-        val assetManager = activity.assets
-        val stream = assetManager.open(filePath)
+        // 用 application context（悬浮窗独立运行时主 Activity 已销毁，activity 为 null），
+        // 否则所有纹理静默加载失败 → 模型白模。Live2dPal.loadFileAsBytes 同此写法。
+        val context = Live2dDelegate.getInstance().appContext
+            ?: Live2dDelegate.getInstance().activity
+            ?: return null
+        val assetManager = context.assets
 
         val options = BitmapFactory.Options().apply {
             inPremultiplied = Live2dDefine.PREMULTIPLIED_ALPHA_ENABLE
         }
-        val bitmap = BitmapFactory.decodeStream(stream, null, options)
-            ?: error("Failed to decode bitmap from $filePath")
-        stream.close()
+        // use{} 确保 decodeStream 抛异常时流也被关闭
+        val bitmap = assetManager.open(filePath).use { stream ->
+            BitmapFactory.decodeStream(stream, null, options)
+        } ?: error("Failed to decode bitmap from $filePath")
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
 

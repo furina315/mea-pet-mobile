@@ -79,6 +79,9 @@ class TtsModelManager(private val context: Context) {
     @Volatile
     private var nativeLoaded = false
 
+    /** 下载重入锁：防止并发下载写同一批 .part 临时文件。 */
+    private val downloadLock = java.util.concurrent.locks.ReentrantLock()
+
     private val client = HttpClient(CIO) {
         expectSuccess = false
         install(HttpTimeout) {
@@ -144,46 +147,55 @@ class TtsModelManager(private val context: Context) {
         Log.i(TAG, "ONNX Runtime 原生库已加载：${lib.absolutePath} ($deviceAbi)")
     }
 
-    /** 顺序下载一组文件，逐个流式落盘并更新进度。已存在且校验通过的文件跳过（断点续传）。 */
+    /** 顺序下载一组文件，逐个流式落盘并更新进度。已存在且校验通过的文件跳过（断点续传）。
+     *  重入保护：正在下载时再次调用直接忽略，避免两个下载协程写同一批 .part 临时文件。 */
     suspend fun download(files: List<ModelFile>) = withContext(Dispatchers.IO) {
-        if (files.isEmpty()) {
-            _state.value = TtsModelState.Error("未配置模型下载地址")
+        if (!downloadLock.tryLock()) {
+            Log.w(TAG, "正在下载中，忽略重复调用")
             return@withContext
         }
-        modelDir.mkdirs()
-        val totalBytes = files.sumOf { it.expectedSize }.takeIf { it > 0 }
-        var downloaded = 0L
         try {
-            for (file in files) {
-                // 跳过已下载完成的（大小校验通过），重试时不全量重下
-                if (isFileComplete(file)) {
-                    Log.d(TAG, "跳过已存在：${file.relativePath}")
-                    downloaded += file.expectedSize
-                    continue
-                }
-                _state.value = TtsModelState.Downloading(
-                    progress = if (totalBytes != null) downloaded.toFloat() / totalBytes else 0f,
-                    currentFile = file.relativePath
-                )
-                downloadOne(file) { readBytes ->
-                    if (totalBytes != null) {
-                        _state.value = TtsModelState.Downloading(
-                            progress = (downloaded + readBytes).toFloat() / totalBytes,
-                            currentFile = file.relativePath
-                        )
+            if (files.isEmpty()) {
+                _state.value = TtsModelState.Error("未配置模型下载地址")
+                return@withContext
+            }
+            modelDir.mkdirs()
+            val totalBytes = files.sumOf { it.expectedSize }.takeIf { it > 0 }
+            var downloaded = 0L
+            try {
+                for (file in files) {
+                    // 跳过已下载完成的（大小校验通过），重试时不全量重下
+                    if (isFileComplete(file)) {
+                        Log.d(TAG, "跳过已存在：${file.relativePath}")
+                        downloaded += file.expectedSize
+                        continue
                     }
+                    _state.value = TtsModelState.Downloading(
+                        progress = if (totalBytes != null) downloaded.toFloat() / totalBytes else 0f,
+                        currentFile = file.relativePath
+                    )
+                    downloadOne(file) { readBytes ->
+                        if (totalBytes != null) {
+                            _state.value = TtsModelState.Downloading(
+                                progress = (downloaded + readBytes).toFloat() / totalBytes,
+                                currentFile = file.relativePath
+                            )
+                        }
+                    }
+                    downloaded += file.expectedSize
                 }
-                downloaded += file.expectedSize
+                refreshState()
+                if (_state.value != TtsModelState.Ready) {
+                    _state.value = TtsModelState.Error("下载完成但文件不完整")
+                } else {
+                    Log.i(TAG, "模型下载完成，共 ${files.size} 个文件")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "模型下载失败", e)
+                _state.value = TtsModelState.Error(e.message ?: "下载失败")
             }
-            refreshState()
-            if (_state.value != TtsModelState.Ready) {
-                _state.value = TtsModelState.Error("下载完成但文件不完整")
-            } else {
-                Log.i(TAG, "模型下载完成，共 ${files.size} 个文件")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "模型下载失败", e)
-            _state.value = TtsModelState.Error(e.message ?: "下载失败")
+        } finally {
+            downloadLock.unlock()
         }
     }
 

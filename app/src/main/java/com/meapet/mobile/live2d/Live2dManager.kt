@@ -49,7 +49,6 @@ class Live2dManager private constructor() {
 
     private var modelLoaded = false
 
-    private val viewMatrix = CubismMatrix44.create()
     private val projection = CubismMatrix44.create()
 
     /** 在 GL 上下文重建时强制重新加载模型（旧上下文的纹理已失效）。 */
@@ -100,8 +99,6 @@ class Live2dManager private constructor() {
             mm.setHeight(2.4f)
             projection.scale(1.0f / aspect, 1.0f)
         }
-
-        viewMatrix.multiplyByMatrix(projection)
 
         delegate.view.preModelDraw(m)
         m.update()

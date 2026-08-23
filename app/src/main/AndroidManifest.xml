@@ -42,14 +42,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
-            <!-- 友盟+ 集成测试：单独 intent-filter，scheme 为 um.你的AppKey -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="um.your_umeng_appkey" />
-            </intent-filter>
         </activity>
 
         <!-- Floating overlay service -->

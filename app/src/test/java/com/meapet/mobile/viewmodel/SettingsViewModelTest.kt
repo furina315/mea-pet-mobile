@@ -77,7 +77,6 @@ class SettingsViewModelTest {
         whenever(settingsManager.getSummaryInterval()).thenReturn(10)
         whenever(settingsManager.isTtsMainEnabled()).thenReturn(false)
         whenever(settingsManager.isTtsOverlayEnabled()).thenReturn(false)
-        whenever(settingsManager.getTtsLanguage()).thenReturn("ZH")
         whenever(settingsManager.getTtsLengthScale()).thenReturn(1.0)
 
         // TTS 模型管理器（state 流）
@@ -98,7 +97,6 @@ class SettingsViewModelTest {
         whenever(settingsManager.colorPresetFlow).thenReturn(MutableStateFlow("default"))
         whenever(settingsManager.ttsMainEnabledFlow).thenReturn(MutableStateFlow(false))
         whenever(settingsManager.ttsOverlayEnabledFlow).thenReturn(MutableStateFlow(false))
-        whenever(settingsManager.ttsLanguageFlow).thenReturn(MutableStateFlow("ZH"))
         whenever(settingsManager.ttsLengthScaleFlow).thenReturn(MutableStateFlow(1.0))
     }
 

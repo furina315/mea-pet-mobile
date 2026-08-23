@@ -34,6 +34,12 @@ class TtsManager(
         private const val TAG = "TtsManager"
 
         /**
+         * 单次合成的最大字符数。超长回复一次性合成会让 attn 矩阵（yLengths×tX 个 Float）
+         * 膨胀到数百 MB 致 OOM，故超出后截断朗读（尾部不念，不影响文字显示）。
+         */
+        private const val MAX_SYNTH_CHARS = 200
+
+        /**
          * TTS 开始播放时的回调（互斥：停掉未完的触摸语音）。
          * 由 app 容器注入，避免 tts 包反向依赖 live2d。
          */
@@ -83,8 +89,13 @@ class TtsManager(
             Log.d(TAG, "模型未就绪，跳过朗读")
             return
         }
-        val text = message.content.trim()
+        var text = message.content.trim()
         if (text.isEmpty()) return
+        // 超长截断：防止 attn 矩阵随文本长度平方膨胀致 OOM（见 MAX_SYNTH_CHARS）
+        if (text.length > MAX_SYNTH_CHARS) {
+            Log.w(TAG, "文本超长（${text.length} 字），截断为前 $MAX_SYNTH_CHARS 字朗读")
+            text = text.substring(0, MAX_SYNTH_CHARS)
+        }
 
         val lengthScale = settingsManager.getTtsLengthScale().toFloat()
 
@@ -92,7 +103,9 @@ class TtsManager(
         currentJob?.cancel()
         player.stop()
 
-        currentJob = scope.launch(Dispatchers.Default) {
+        // 合成放 IO 线程池：首次 G2P 要读两个大词典（IO 密集），ONNX 推理走 native 计算，
+        // 都不应挤占 Dispatchers.Default（它还承载其他协程）。IO 池弹性更大。
+        currentJob = scope.launch(Dispatchers.IO) {
             _isPlaying.value = true
             try {
                 val audio = synthesizer.synthesize(
@@ -126,6 +139,15 @@ class TtsManager(
     fun release() {
         stop()
         player.release()
+    }
+
+    /**
+     * 删除模型前调用：停止播放/合成并关闭底层 ONNX session（73MB+ native 内存）。
+     * 之后若重新下载模型，引擎会在下次合成时按新模型懒加载重建 session。
+     */
+    fun releaseEngine() {
+        stop()
+        synthesizer.closeEngine()
     }
 
     /** 对应来源的语音开关是否开启。 */

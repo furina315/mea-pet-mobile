@@ -88,7 +88,7 @@ import com.meapet.mobile.ui.theme.isDarkTheme
 import com.meapet.mobile.viewmodel.SettingsUiState
 import com.meapet.mobile.viewmodel.SettingsViewModel
 import com.meapet.mobile.settings.SettingsKeys
-import com.meapet.mobile.tts.g2p.TtsLanguage
+
 
 // ── 视觉常量（语义命名，避免魔法数字） ──────────────────
 
@@ -583,32 +583,6 @@ private fun TtsSection(
         onCheckedChange = { viewModel.updateTtsOverlayEnabled(it) },
         enabled = modelReady
     )
-
-    // ── 默认语音（中/日）──
-    Spacer(Modifier.height(4.dp))
-    Text(
-        "默认语音",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (modelReady) 1f else 0.5f)
-    )
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        // 当前仅开放中文；保留选择 UI 以便后续扩展其它语言
-        TtsLanguage.entries.forEach { lang ->
-            val selected = state.ttsLanguage.equals(lang.name, ignoreCase = true)
-            val label = when (lang) {
-                TtsLanguage.ZH -> "中文"
-            }
-            FilterChipLike(
-                label = label,
-                selected = selected,
-                enabled = modelReady,
-                onClick = { viewModel.updateTtsLanguage(lang.name) }
-            )
-        }
-    }
 
     // ── 语速 ──
     Spacer(Modifier.height(8.dp))

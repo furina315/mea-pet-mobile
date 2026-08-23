@@ -35,12 +35,9 @@ object Live2dPal {
             val ctx = Live2dDelegate.getInstance().appContext
                 ?: Live2dDelegate.getInstance().activity
                 ?: return ByteArray(0)
-            val stream = ctx.assets.open(path)
-            stream.use { s ->
-                val buffer = ByteArray(s.available())
-                s.read(buffer)
-                buffer
-            }
+            // readBytes() 循环读满：单次 read() 不保证填满，AAPT 压缩/特殊 ROM 下可能短读，
+            // 导致 moc3/motion 数据静默截断、下游 Cubism 解析崩溃
+            ctx.assets.open(path).use { it.readBytes() }
         } catch (e: IOException) {
             Log.e(TAG, "Failed to load file: $path", e)
             ByteArray(0)

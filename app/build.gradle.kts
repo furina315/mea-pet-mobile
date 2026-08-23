@@ -96,6 +96,14 @@ android {
     }
 }
 
+// Kotlin JVM target 显式对齐 Java 11（与上方 compileOptions 保持一致，
+// 防止依赖某侧默认值漂移导致 bytecode 版本不一致）
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
+    }
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

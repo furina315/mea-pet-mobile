@@ -31,7 +31,6 @@ object SettingsKeys {
     // ── TTS 语音 ─────────────────────────────────────
     const val TTS_MAIN_ENABLED = "tts_main_enabled"        // 主界面语音开关
     const val TTS_OVERLAY_ENABLED = "tts_overlay_enabled"  // 悬浮窗语音开关
-    const val TTS_LANGUAGE = "tts_language"                // 默认语音：ZH | JA（EN 占位）
     const val TTS_LENGTH_SCALE = "tts_length_scale"        // 语速：0.5~2.0，1.0 为原速
 
     /** 合理的默认值。 */
@@ -52,7 +51,6 @@ object SettingsKeys {
         // TTS
         const val TTS_MAIN_ENABLED = false
         const val TTS_OVERLAY_ENABLED = false
-        const val TTS_LANGUAGE = "ZH"
         const val TTS_LENGTH_SCALE = 1.0
     }
 }

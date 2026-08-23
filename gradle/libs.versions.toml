@@ -17,7 +17,6 @@ mockitoKotlin = "5.4.0"
 umengCommon = "9.9.2"
 umengAsms = "1.8.7.2"
 onnxruntime = "1.23.2"
-piperPlusG2p = "1.0.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -60,8 +59,6 @@ umeng-umsdk-asms = { group = "com.umeng.umsdk", name = "asms", version.ref = "um
 
 # ONNX Runtime（本地 VITS TTS 推理）
 onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
-# 日语 G2P（OpenJTalk 前端，预编译 JNI，词典需单独下载）
-piper-plus-g2p = { group = "io.github.ayutaz", name = "piper-plus-g2p-android", version.ref = "piperPlusG2p" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

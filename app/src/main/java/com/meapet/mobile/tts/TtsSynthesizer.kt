@@ -13,7 +13,8 @@ class TtsSynthesizer(
     private val engine: VitsOnnxEngine,
     private val g2p: G2pProcessor,
     private val config: SynthesisConfig = SynthesisConfig()
-) {    companion object {
+) {
+    companion object {
         const val SAMPLE_RATE = 22050
     }
 
@@ -51,4 +52,7 @@ class TtsSynthesizer(
         val z = engine.runFlow(zP, yLengths)
         return engine.runDec(z, yLengths)
     }
+
+    /** 释放底层 ONNX session 与 native 内存（删模型时调用，防止 73MB+ 泄漏）。 */
+    fun closeEngine() = engine.close()
 }
