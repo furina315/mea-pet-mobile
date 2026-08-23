@@ -50,7 +50,7 @@ class TtsManager(
     /** 发声来源。 */
     enum class Source { MAIN, OVERLAY }
 
-    /** 是否正在合成或播放（驱动喇叭图标变色）。 */
+    /** 是否正在播放（驱动喇叭图标变色）。合成阶段为 false，真正出声才置 true。 */
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
@@ -106,15 +106,16 @@ class TtsManager(
 
         val lengthScale = settingsManager.getTtsLengthScale().toFloat()
 
-        // 打断上一段：取消合成 + 停止播放
+        // 打断上一段：取消合成 + 停止播放；同时复位播放中标记（新段合成期间不亮，
+        // 喇叭图标只在真正出声时变亮——见下方 play 前置位）
         currentJob?.cancel()
         Log.d(TAG, "speak: 已取消上一段 currentJob，调用 player.stop()")
         player.stop()
+        _isPlaying.value = false
 
         // 合成放 IO 线程池：首次 G2P 要读两个大词典（IO 密集），ONNX 推理走 native 计算，
         // 都不应挤占 Dispatchers.Default（它还承载其他协程）。IO 池弹性更大。
         currentJob = scope.launch(Dispatchers.IO) {
-            _isPlaying.value = true
             try {
                 Log.d(TAG, "speak: 开始合成 '${text.take(20)}' (${text.length} 字, lenScale=$lengthScale)")
                 val audio = synthesizer.synthesize(
@@ -123,6 +124,8 @@ class TtsManager(
                 )
                 Log.d(TAG, "speak: 合成完成，audio=${audio.size} 样本")
                 if (audio.isNotEmpty()) {
+                    // 真正开始播放前才亮（合成 / 排队阶段喇叭保持熄灭）
+                    _isPlaying.value = true
                     onPlaybackStart?.invoke()   // 互斥：停掉未完的触摸语音
                     player.play(audio)          // 播完经 onPlaybackComplete 解除 isPlaying
                 } else {
