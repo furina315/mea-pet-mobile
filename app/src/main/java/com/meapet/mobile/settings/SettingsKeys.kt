@@ -28,6 +28,20 @@ object SettingsKeys {
     const val COLOR_PRESET = "color_preset"  // "default" | "ocean" | "forest" | "sunset" | "rose" | "mono"
     const val FIRST_LAUNCH = "first_launch"
 
+    // ── 界面外观 ─────────────────────────────────────
+    /** 主页聊天气泡透明度：0.2~1.0，1.0 为不透明。 */
+    const val CHAT_BUBBLE_ALPHA = "chat_bubble_alpha"
+
+    // ── 更新 ────────────────────────────────────────
+    /** 启动时自动检查更新（默认开启；关闭后仅在关于页手动检测）。 */
+    const val ENABLE_AUTO_UPDATE_CHECK = "enable_auto_update_check"
+
+    // ── 背景壁纸 ────────────────────────────────────
+    /** 主界面背景壁纸文件绝对路径；空串 = 默认纯色背景。 */
+    const val WALLPAPER_PATH = "wallpaper_path"
+    /** 主界面背景壁纸模糊强度：0.0~1.0，0 = 不模糊。 */
+    const val WALLPAPER_BLUR = "wallpaper_blur"
+
     // ── TTS 语音 ─────────────────────────────────────
     const val TTS_MAIN_ENABLED = "tts_main_enabled"        // 主界面语音开关
     const val TTS_OVERLAY_ENABLED = "tts_overlay_enabled"  // 悬浮窗语音开关
@@ -52,5 +66,15 @@ object SettingsKeys {
         const val TTS_MAIN_ENABLED = false
         const val TTS_OVERLAY_ENABLED = false
         const val TTS_LENGTH_SCALE = 1.0
+
+        // 界面外观
+        const val CHAT_BUBBLE_ALPHA = 1.0
+
+        // 更新
+        const val ENABLE_AUTO_UPDATE_CHECK = true
+
+        // 背景壁纸
+        const val WALLPAPER_PATH = ""
+        const val WALLPAPER_BLUR = 0.0
     }
 }

@@ -65,6 +65,19 @@ class Live2dDelegate private constructor() {
     var view = Live2dView()
         private set
 
+    /** 主界面背景壁纸渲染器（GL 线程内绘制，无壁纸时 no-op）。 */
+    val wallpaper = WallpaperRenderer()
+
+    /** 主界面背景壁纸文件绝对路径；null = 默认纯色。主线程写、GL 线程每帧读。 */
+    var wallpaperPath: String?
+        get() = wallpaper.desiredPath
+        set(value) { wallpaper.desiredPath = value }
+
+    /** 主界面背景壁纸模糊强度（0~1）。主线程写、GL 线程每帧读。 */
+    var wallpaperBlur: Float
+        get() = wallpaper.blur
+        set(value) { wallpaper.blur = value }
+
     var windowWidth = 0
         private set
     var windowHeight = 0
@@ -156,6 +169,9 @@ class Live2dDelegate private constructor() {
         // 强制重新加载模型（重置 modelLoaded，在新 GL 上下文中重绑纹理）
         Live2dManager.getInstance().resetModel()
 
+        // 背景壁纸的旧上下文纹理/program 已失效，重置后下帧按 desiredPath 重载
+        wallpaper.reset()
+
         Log.d(TAG, "onSurfaceCreated complete")
     }
 
@@ -186,6 +202,14 @@ class Live2dDelegate private constructor() {
         GLES20.glClearColor(bgR, bgG, bgB, bgA)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         GLES20.glClearDepthf(1.0f)
+
+        // ── 背景壁纸层：清屏（纯色兜底）之后、Live2D 模型绘制之前 ──
+        // 无壁纸时 onFrame 是 no-op，清屏纯色照旧。悬浮窗走独立渲染器，不受影响。
+        try {
+            wallpaper.onFrame(windowWidth, windowHeight)
+        } catch (e: Exception) {
+            Log.e(TAG, "Wallpaper render error: ${e.message}")
+        }
 
         try {
             view.render()

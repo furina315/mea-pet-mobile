@@ -59,7 +59,16 @@ data class SettingsUiState(
     /** 模型下载状态（来自 TtsModelManager.state）。 */
     val ttsModelState: TtsModelState = TtsModelState.NotDownloaded,
     /** 模型下载地址是否已配置（BuildConfig 注入）；未配置时下载入口提示。 */
-    val ttsModelUrlConfigured: Boolean = false
+    val ttsModelUrlConfigured: Boolean = false,
+    // ── 界面外观 ──
+    val chatBubbleAlpha: Double = SettingsKeys.Defaults.CHAT_BUBBLE_ALPHA,
+    // ── 更新 ──
+    val enableAutoUpdateCheck: Boolean = SettingsKeys.Defaults.ENABLE_AUTO_UPDATE_CHECK,
+    // ── 背景壁纸 ──
+    /** 主界面背景壁纸文件绝对路径（空串 = 默认纯色）。 */
+    val wallpaperPath: String = SettingsKeys.Defaults.WALLPAPER_PATH,
+    /** 主界面背景壁纸模糊强度（0~1，0 = 不模糊）。 */
+    val wallpaperBlur: Double = SettingsKeys.Defaults.WALLPAPER_BLUR
 )
 
 open class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -90,7 +99,11 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
             ttsOverlayEnabled = settingsManager.isTtsOverlayEnabled(),
             ttsLengthScale = settingsManager.getTtsLengthScale(),
             ttsModelState = ttsModelManager.state.value,
-            ttsModelUrlConfigured = container.config.ttsModelBaseUrl.isNotBlank()
+            ttsModelUrlConfigured = container.config.ttsModelBaseUrl.isNotBlank(),
+            chatBubbleAlpha = settingsManager.getChatBubbleAlpha(),
+            enableAutoUpdateCheck = settingsManager.isAutoUpdateCheckEnabled(),
+            wallpaperPath = settingsManager.getWallpaperPath(),
+            wallpaperBlur = settingsManager.getWallpaperBlur()
         )
     }
 
@@ -116,6 +129,16 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         subscribe(settingsManager.ttsOverlayEnabledFlow) { s, e -> s.copy(ttsOverlayEnabled = e) }
         subscribe(settingsManager.ttsLengthScaleFlow) { s, v -> s.copy(ttsLengthScale = v) }
         subscribe(ttsModelManager.state) { s, st -> s.copy(ttsModelState = st) }
+
+        // 界面外观
+        subscribe(settingsManager.chatBubbleAlphaFlow) { s, v -> s.copy(chatBubbleAlpha = v) }
+
+        // 更新
+        subscribe(settingsManager.enableAutoUpdateCheckFlow) { s, e -> s.copy(enableAutoUpdateCheck = e) }
+
+        // 背景壁纸
+        subscribe(settingsManager.wallpaperPathFlow) { s, p -> s.copy(wallpaperPath = p) }
+        subscribe(settingsManager.wallpaperBlurFlow) { s, v -> s.copy(wallpaperBlur = v) }
 
         // 隐私授权状态（响应式订阅：同意/撤销后 UI 即时反映）
         subscribe(privacyAgreedFlow()) { s, agreed ->
@@ -242,11 +265,60 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch { settingsManager.setTtsLengthScale(scale) }
     }
 
+    // ── 界面外观 ──────────────────────────────────────
+
+    /** 更新主页聊天气泡透明度（0.2~1.0）。 */
+    fun updateChatBubbleAlpha(alpha: Double) {
+        viewModelScope.launch { settingsManager.setChatBubbleAlpha(alpha) }
+    }
+
+    /** 切换启动自动检查更新（默认开启）。 */
+    fun updateEnableAutoUpdateCheck(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.setEnableAutoUpdateCheck(enabled) }
+    }
+
+    // ── 背景壁纸 ──────────────────────────────────────
+
+    /**
+     * 从相册 URI 导入壁纸：复制到 filesDir 并持久化路径。
+     * 导入成功会经 wallpaperPathFlow 自动刷新 UI 与主界面渲染。
+     */
+    fun importWallpaper(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val path = container.wallpaperStore.importFromContentUri(uri) ?: return@launch
+            settingsManager.setWallpaperPath(path)
+        }
+    }
+
+    /** 恢复默认纯色背景：清空壁纸文件并置空路径。 */
+    fun clearWallpaper() {
+        viewModelScope.launch {
+            container.wallpaperStore.clearAll()
+            settingsManager.setWallpaperPath("")
+        }
+    }
+
+    /** 更新背景壁纸模糊强度（0~1，0 = 不模糊）。 */
+    fun updateWallpaperBlur(blur: Double) {
+        viewModelScope.launch { settingsManager.setWallpaperBlur(blur) }
+    }
+
     /** 下载 TTS 模型（4 个 onnx + 当前 ABI 的原生库）。地址未配置则进入 Error 提示。 */
     fun downloadTtsModel() {
         viewModelScope.launch {
             val files = ttsModelManager.buildDownloadFiles(container.config.ttsModelBaseUrl)
             ttsModelManager.download(files)
+        }
+    }
+
+    /**
+     * 从本地 zip 资源包手动导入 TTS 模型（绕过 GitHub 下载）。
+     * 导入前先停播并释放引擎，避免旧 session 占用即将被覆盖的 native 库。
+     */
+    fun importTtsModelZip(uri: android.net.Uri) {
+        viewModelScope.launch {
+            container.ttsManager.releaseEngine()
+            ttsModelManager.importFromZip(uri)
         }
     }
 

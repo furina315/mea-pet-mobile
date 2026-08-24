@@ -217,7 +217,7 @@ class FloatingLive2dService : Service() {
         renderer = Live2dOverlayRenderer(
             isShuttingDown = { Live2dRenderState.shuttingDown.value },
             onLoadFailed = { stopSelf() }
-        )
+        ).also { it.setOpacity(overlayAlpha) }
 
         glSurfaceView = object : GLSurfaceView(this) {
             override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -296,6 +296,11 @@ class FloatingLive2dService : Service() {
     /** 实时应用 Live2D 悬浮窗透明度（内存态）。 */
     private fun applyOverlayAlpha(alpha: Float) {
         overlayAlpha = alpha
+        // 真正生效的是 GL 绘制管线内的整体不透明度：GLSurfaceView 的画面在独立
+        // Surface 上，View.setAlpha 只作用于占位层，部分机型（含 Android 10+ 国产
+        // ROM）合成时不乘该 alpha 导致调节无效。GL 内乘 alpha 对所有机型统一生效。
+        renderer?.setOpacity(alpha)
+        // 保留 View alpha 作为视觉辅助（GL 内已覆盖全部机型，双保险）
         if (::glSurfaceView.isInitialized) glSurfaceView.alpha = alpha
     }
 

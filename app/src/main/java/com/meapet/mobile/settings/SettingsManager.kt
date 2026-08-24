@@ -73,6 +73,10 @@ class SettingsManager(context: Context) {
     private val KEY_TTS_MAIN_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_MAIN_ENABLED)
     private val KEY_TTS_OVERLAY_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_OVERLAY_ENABLED)
     private val KEY_TTS_LENGTH_SCALE = doublePreferencesKey(SettingsKeys.TTS_LENGTH_SCALE)
+    private val KEY_CHAT_BUBBLE_ALPHA = doublePreferencesKey(SettingsKeys.CHAT_BUBBLE_ALPHA)
+    private val KEY_ENABLE_AUTO_UPDATE_CHECK = booleanPreferencesKey(SettingsKeys.ENABLE_AUTO_UPDATE_CHECK)
+    private val KEY_WALLPAPER_PATH = stringPreferencesKey(SettingsKeys.WALLPAPER_PATH)
+    private val KEY_WALLPAPER_BLUR = doublePreferencesKey(SettingsKeys.WALLPAPER_BLUR)
 
     // ── Flows (响应式订阅) ────────────────────────────
 
@@ -156,6 +160,26 @@ class SettingsManager(context: Context) {
         prefs[KEY_TTS_LENGTH_SCALE] ?: SettingsKeys.Defaults.TTS_LENGTH_SCALE
     }
 
+    /** 主页聊天气泡透明度流（0.2~1.0，1.0 不透明）。 */
+    val chatBubbleAlphaFlow: Flow<Double> = dataStore.data.map { prefs ->
+        prefs[KEY_CHAT_BUBBLE_ALPHA] ?: SettingsKeys.Defaults.CHAT_BUBBLE_ALPHA
+    }
+
+    /** 启动自动检查更新开关流（默认开启）。 */
+    val enableAutoUpdateCheckFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_ENABLE_AUTO_UPDATE_CHECK] ?: SettingsKeys.Defaults.ENABLE_AUTO_UPDATE_CHECK
+    }
+
+    /** 主界面背景壁纸路径流（空串 = 默认纯色）。 */
+    val wallpaperPathFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_WALLPAPER_PATH] ?: SettingsKeys.Defaults.WALLPAPER_PATH
+    }
+
+    /** 主界面背景壁纸模糊强度流（0~1，0 = 不模糊）。 */
+    val wallpaperBlurFlow: Flow<Double> = dataStore.data.map { prefs ->
+        prefs[KEY_WALLPAPER_BLUR] ?: SettingsKeys.Defaults.WALLPAPER_BLUR
+    }
+
     // ── 同步 getter（非 Flow 场景使用，如 Client 构造）──
     // 读取内存快照，正常路径无磁盘 IO；快照未就绪时短暂 runBlocking 读一次兜底
 
@@ -192,6 +216,19 @@ class SettingsManager(context: Context) {
 
     /** 语速（length_scale，1.0 原速）。 */
     fun getTtsLengthScale(): Double = currentPrefs()[KEY_TTS_LENGTH_SCALE] ?: SettingsKeys.Defaults.TTS_LENGTH_SCALE
+
+    /** 主页聊天气泡透明度（0.2~1.0，1.0 不透明）。 */
+    fun getChatBubbleAlpha(): Double = currentPrefs()[KEY_CHAT_BUBBLE_ALPHA] ?: SettingsKeys.Defaults.CHAT_BUBBLE_ALPHA
+
+    /** 是否启用启动自动检查更新（默认开启）。 */
+    fun isAutoUpdateCheckEnabled(): Boolean =
+        currentPrefs()[KEY_ENABLE_AUTO_UPDATE_CHECK] ?: SettingsKeys.Defaults.ENABLE_AUTO_UPDATE_CHECK
+
+    /** 主界面背景壁纸路径（空串 = 默认纯色）。 */
+    fun getWallpaperPath(): String = currentPrefs()[KEY_WALLPAPER_PATH] ?: SettingsKeys.Defaults.WALLPAPER_PATH
+
+    /** 主界面背景壁纸模糊强度（0~1，0 = 不模糊）。 */
+    fun getWallpaperBlur(): Double = currentPrefs()[KEY_WALLPAPER_BLUR] ?: SettingsKeys.Defaults.WALLPAPER_BLUR
 
     // ── 写入方法 ──────────────────────────────────────
     // edit 返回写入后的最新快照，随手更新缓存，保证同步 getter 读己之写
@@ -264,6 +301,22 @@ class SettingsManager(context: Context) {
 
     suspend fun setTtsLengthScale(scale: Double) {
         cachedPrefs = dataStore.edit { prefs -> prefs[KEY_TTS_LENGTH_SCALE] = scale }
+    }
+
+    suspend fun setChatBubbleAlpha(alpha: Double) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_CHAT_BUBBLE_ALPHA] = alpha }
+    }
+
+    suspend fun setEnableAutoUpdateCheck(enabled: Boolean) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_ENABLE_AUTO_UPDATE_CHECK] = enabled }
+    }
+
+    suspend fun setWallpaperPath(path: String) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_WALLPAPER_PATH] = path }
+    }
+
+    suspend fun setWallpaperBlur(blur: Double) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_WALLPAPER_BLUR] = blur }
     }
 
     /** 清除所有设置（恢复出厂）。 */

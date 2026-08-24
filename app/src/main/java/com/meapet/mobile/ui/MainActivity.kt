@@ -90,6 +90,14 @@ class MainActivity : ComponentActivity() {
             window.setBackgroundDrawable(ColorDrawable(0xFFF7F7F7.toInt()))
         }
 
+        // 首帧即预置背景壁纸路径与模糊强度（从 DataStore 读），避免旋转/重建后先闪纯色再上壁纸；
+        // 后续由 Compose 内 wallpaperPathFlow / wallpaperBlurFlow 响应式接管（见 setContent）
+        try {
+            val d = Live2dDelegate.getInstance()
+            d.wallpaperPath = container.settingsManager.getWallpaperPath().ifBlank { null }
+            d.wallpaperBlur = container.settingsManager.getWallpaperBlur().toFloat()
+        } catch (_: Exception) {}
+
         insetsController = WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
@@ -123,6 +131,18 @@ class MainActivity : ComponentActivity() {
                     Live2dDelegate.getInstance().let { d ->
                         d.bgR = bgColor[0]; d.bgG = bgColor[1]; d.bgB = bgColor[2]; d.bgA = 1.0f
                     }
+                }
+
+                // 背景壁纸：设置变化实时同步到 GL（GL 线程每帧读，下帧即生效）
+                val wallpaperPath by container.settingsManager.wallpaperPathFlow
+                    .collectAsState(initial = "")
+                val wallpaperBlur by container.settingsManager.wallpaperBlurFlow
+                    .collectAsState(initial = 0.0)
+                LaunchedEffect(wallpaperPath) {
+                    Live2dDelegate.getInstance().wallpaperPath = wallpaperPath.ifBlank { null }
+                }
+                LaunchedEffect(wallpaperBlur) {
+                    Live2dDelegate.getInstance().wallpaperBlur = wallpaperBlur.toFloat()
                 }
 
                 // ── 隐私协议弹窗（首次启动且未做过选择时显示） ──

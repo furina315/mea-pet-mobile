@@ -1,11 +1,17 @@
 package com.meapet.mobile.ui.screen
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +22,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -63,6 +70,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -71,8 +79,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -88,6 +99,8 @@ import com.meapet.mobile.ui.theme.isDarkTheme
 import com.meapet.mobile.viewmodel.SettingsUiState
 import com.meapet.mobile.viewmodel.SettingsViewModel
 import com.meapet.mobile.settings.SettingsKeys
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 // ── 视觉常量（语义命名，避免魔法数字） ──────────────────
@@ -123,6 +136,22 @@ private val MAX_TOKENS_RANGE = 256f..8192f
 private const val MAX_TOKENS_STEPS = 30
 private val SUMMARY_INTERVAL_RANGE = 3f..30f
 private const val SUMMARY_INTERVAL_STEPS = 26
+
+/**
+ * 聊天气泡透明度滑杆：0.2~1.0，1.0 不透明（下限 0.2 保证气泡仍可辨识）。
+ */
+private val CHAT_BUBBLE_ALPHA_RANGE = 0.2f..1.0f
+private const val CHAT_BUBBLE_ALPHA_STEPS = 15
+
+/** 背景壁纸模糊滑杆：0~1，0 = 不模糊；steps=19 → 均分 20 段，每段恰 0.05。 */
+private val WALLPAPER_BLUR_RANGE = 0f..1f
+private const val WALLPAPER_BLUR_STEPS = 19
+
+/**
+ * 壁纸预览盒纵横比（宽 / 高）。竖图源也按此比例 cover 裁剪，避免溢出盒高叠到下方按钮。
+ * 2:1 略宽于手机屏宽/盒高（约 2.2:1），视觉舒展。
+ */
+private const val PREVIEW_ASPECT_RATIO = 2f
 
 /**
  * 语速滑杆：显示/拖动的是「语速倍率 speed」（0.5=半速慢、2.0=双倍速快），
@@ -193,13 +222,33 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp)
         ) {
-            ApiConfigSection(state, settingsViewModel, local)
-            ModelParamsSection(state, settingsViewModel, local, darkTheme)
-            SystemPromptSection(settingsViewModel, local)
-            MemorySection(state, settingsViewModel, local, darkTheme)
-            TtsSection(state, settingsViewModel, darkTheme)
-            ThemeSection(state, settingsViewModel, darkTheme)
-            PrivacySection(state, settingsViewModel, onOpenPrivacyPolicy, onExitApp)
+            // ── 对话：模型接入与对话行为 ──
+            SettingsGroup(title = "对话") {
+                ApiConfigSection(state, settingsViewModel, local)
+                ModelParamsSection(state, settingsViewModel, local, darkTheme)
+                SystemPromptSection(settingsViewModel, local)
+                MemorySection(state, settingsViewModel, local, darkTheme)
+            }
+
+            // ── 外观：气泡与主题 ──
+            SettingsGroup(title = "外观") {
+                AppearanceSection(state, settingsViewModel, darkTheme)
+            }
+
+            // ── 语音：TTS ──
+            SettingsGroup(title = "语音") {
+                TtsSection(state, settingsViewModel, darkTheme)
+            }
+
+            // ── 更新 ──
+            SettingsGroup(title = "更新") {
+                UpdateSection(state, settingsViewModel, darkTheme)
+            }
+
+            // ── 隐私与数据 ──
+            SettingsGroup(title = "隐私与数据") {
+                PrivacySection(state, settingsViewModel, onOpenPrivacyPolicy, onExitApp)
+            }
 
             Spacer(Modifier.height(24.dp))
         }
@@ -557,6 +606,297 @@ private fun MemorySection(
     )
 }
 
+/** 背景壁纸：当前预览 + 从相册选图 + 恢复默认 + 模糊强度。 */
+@Composable
+private fun BackgroundWallpaperSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    darkTheme: Boolean
+) {
+    SectionTitle("背景壁纸")
+    Text(
+        text = "从相册选一张图片作为主界面聊天背景，实时生效；悬浮窗保持透明",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_MUTED_TEXT),
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+
+    // 相册选图（PickVisualMedia，免权限；activity-compose 已内置）
+    val pickMedia = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        uri?.let { viewModel.importWallpaper(it) }
+    }
+
+    // ── 模糊强度（本地拖动状态）──
+    // 仅在有壁纸时启用。用本地 remember 拖动顺滑，松手才落盘（与语速/透明度一致）。
+    // 先于预览声明，让预览在拖动时实时跟随。
+    val blur = state.wallpaperBlur.toFloat().coerceIn(0f, 1f)
+    var localBlur by remember { mutableStateOf(blur) }
+    LaunchedEffect(state.wallpaperBlur) {
+        if (localBlur != state.wallpaperBlur.toFloat()) {
+            localBlur = state.wallpaperBlur.toFloat()
+        }
+    }
+
+    // 源缩略图（未模糊）：路径不变就复用，避免随滑杆拖动反复解码原图
+    var sourceThumb by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(state.wallpaperPath) {
+        sourceThumb = if (state.wallpaperPath.isBlank()) null
+        else withContext(Dispatchers.IO) { decodeThumbnail(state.wallpaperPath, 480) }
+    }
+
+    // 实时预览：模糊强度（localBlur）变化即在 IO 线程重算；0 = 直接显示源图。
+    // σ 与 GL 渲染同源：blur→σ = 12·√blur（见 Live2dDefine.blurToSigma），再按
+    // 「缩略图宽 / 屏幕宽」等比换算，保证预览模糊观感与主界面一致。
+    val screenWidthPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
+    val preview by produceState<Bitmap?>(initialValue = sourceThumb, sourceThumb, localBlur) {
+        val src = sourceThumb
+        value = if (src == null || localBlur <= 0.001f) src
+        else withContext(Dispatchers.IO) {
+            val sigma = com.meapet.mobile.live2d.Live2dDefine.blurToSigma(localBlur) *
+                src.width / screenWidthPx
+            gaussianBlurBitmap(src, sigma)
+        }
+    }
+
+    // 预览盒纵横比（宽 / 高）：竖图源也按盒子比例做 cover 裁剪，不溢出盒高、不叠到下方按钮。
+    // 竖图放大到宽度填满盒宽后高度远超盒高，需按比例约束（aspectRatio 锁形状），
+    // 再让 Image 在盒内居中铺满并裁掉超出的上/下部分。
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = ALPHA_CARD_BG)),
+        contentAlignment = Alignment.Center
+    ) {
+        val bmp = preview
+        if (bmp != null) {
+            Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = "当前壁纸",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(PREVIEW_ASPECT_RATIO)
+                    .align(Alignment.Center),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Text(
+                text = "当前为默认纯色背景",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_MUTED_TEXT)
+            )
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = {
+                pickMedia.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("从相册选择")
+        }
+        OutlinedButton(
+            onClick = { viewModel.clearWallpaper() },
+            enabled = state.wallpaperPath.isNotBlank(),
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("恢复默认")
+        }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    Text(
+        text = "背景模糊: ${kotlin.math.round(localBlur * 100).toInt()}%",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+            alpha = if (state.wallpaperPath.isNotBlank()) 1f else 0.5f
+        )
+    )
+    Slider(
+        value = localBlur,
+        onValueChange = { localBlur = it },
+        onValueChangeFinished = {
+            viewModel.updateWallpaperBlur(localBlur.toDouble())
+        },
+        valueRange = WALLPAPER_BLUR_RANGE,
+        steps = WALLPAPER_BLUR_STEPS,
+        enabled = state.wallpaperPath.isNotBlank(),
+        modifier = Modifier.fillMaxWidth(),
+        colors = SliderDefaults.colors(inactiveTrackColor = sliderTrackColor(darkTheme))
+    )
+}
+
+/** 按 maxDim 限制采样解码缩略图。 */
+private fun decodeThumbnail(path: String, maxDim: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    var sample = 1
+    while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxDim) sample *= 2
+    return BitmapFactory.decodeFile(path, BitmapFactory.Options().apply {
+        inSampleSize = sample
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    })
+}
+
+/**
+ * 可分离高斯模糊（CPU，两遍同轴，约 3σ 截断）。
+ *
+ * 仅在 IO 线程调用（随滑杆拖动时也会触发，保持 480px 缩略图尺度、单遍 O(n) 成本）。
+ * 内核 tap 数随 σ 自适应（与 GL 33-tap / σ≤16px 的口径一致）；σ≤0.6 时截断半径不足
+ * 1 像素，直接返回原图避免画质损失与多余开销。
+ */
+private fun gaussianBlurBitmap(src: Bitmap, sigma: Float): Bitmap {
+    val w = src.width
+    val h = src.height
+    if (sigma <= 0.6f) return src
+
+    val sigmaC = sigma.coerceIn(0.6f, 16f)
+    val radius = (sigmaC * 3f).toInt().coerceIn(1, 33)
+    val half = radius.coerceAtMost(33)
+
+    // 预计算 (2*half+1)-tap 高斯权重（对称），并归一化
+    val weights = FloatArray(2 * half + 1)
+    var sum = 0f
+    val twoSigma2 = 2f * sigmaC * sigmaC
+    for (i in -half..half) {
+        val wgt = kotlin.math.exp(-(i * i) / twoSigma2)
+        weights[i + half] = wgt
+        sum += wgt
+    }
+    for (i in weights.indices) weights[i] /= sum
+
+    val srcPx = IntArray(w * h)
+    src.getPixels(srcPx, 0, w, 0, 0, w, h)
+
+    // 第 1 遍：水平模糊
+    val tmp = IntArray(w * h)
+    for (y in 0 until h) {
+        val row = y * w
+        for (x in 0 until w) {
+            var r = 0f; var g = 0f; var b = 0f; var a = 0f
+            for (i in -half..half) {
+                val px = srcPx[row + (x + i).coerceIn(0, w - 1)]
+                val wt = weights[i + half]
+                a += ((px ushr 24) and 0xFF) * wt
+                r += ((px ushr 16) and 0xFF) * wt
+                g += ((px ushr 8) and 0xFF) * wt
+                b += (px and 0xFF) * wt
+            }
+            tmp[row + x] = ((a.toInt() and 0xFF) shl 24) or
+                ((r.toInt() and 0xFF) shl 16) or
+                ((g.toInt() and 0xFF) shl 8) or
+                (b.toInt() and 0xFF)
+        }
+    }
+
+    // 第 2 遍：垂直模糊，直接写入结果
+    val outPx = IntArray(w * h)
+    for (y in 0 until h) {
+        for (x in 0 until w) {
+            var r = 0f; var g = 0f; var b = 0f; var a = 0f
+            for (i in -half..half) {
+                val px = tmp[(y + i).coerceIn(0, h - 1) * w + x]
+                val wt = weights[i + half]
+                a += ((px ushr 24) and 0xFF) * wt
+                r += ((px ushr 16) and 0xFF) * wt
+                g += ((px ushr 8) and 0xFF) * wt
+                b += (px and 0xFF) * wt
+            }
+            outPx[y * w + x] = ((a.toInt() and 0xFF) shl 24) or
+                ((r.toInt() and 0xFF) shl 16) or
+                ((g.toInt() and 0xFF) shl 8) or
+                (b.toInt() and 0xFF)
+        }
+    }
+
+    return Bitmap.createBitmap(outPx, w, h, Bitmap.Config.ARGB_8888)
+}
+
+/** 外观：背景壁纸 + 聊天气泡透明度 + 主题（模式 / 动态颜色 / 颜色预设）。 */
+@Composable
+private fun AppearanceSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    darkTheme: Boolean
+) {
+    // ── 背景壁纸 ──
+    BackgroundWallpaperSection(state, viewModel, darkTheme)
+
+    Spacer(Modifier.height(12.dp))
+
+    // ── 聊天气泡 ──
+    // 透明度滑杆（0.2~1.0）。用本地 remember 拖动顺滑，松手才落盘（与语速一致）。
+    val alpha = state.chatBubbleAlpha.toFloat().coerceIn(0.2f, 1.0f)
+    var localAlpha by remember { mutableStateOf(alpha) }
+    LaunchedEffect(state.chatBubbleAlpha) {
+        if (localAlpha != state.chatBubbleAlpha.toFloat()) {
+            localAlpha = state.chatBubbleAlpha.toFloat()
+        }
+    }
+
+    Text(
+        text = "聊天气泡透明度: ${(localAlpha * 100).toInt()}%",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Slider(
+        value = localAlpha,
+        onValueChange = { localAlpha = it },
+        onValueChangeFinished = {
+            viewModel.updateChatBubbleAlpha(localAlpha.toDouble())
+        },
+        valueRange = CHAT_BUBBLE_ALPHA_RANGE,
+        steps = CHAT_BUBBLE_ALPHA_STEPS,
+        modifier = Modifier.fillMaxWidth(),
+        colors = SliderDefaults.colors(inactiveTrackColor = sliderTrackColor(darkTheme))
+    )
+
+    Spacer(Modifier.height(12.dp))
+    SectionTitle("主题")
+
+    // ── 主题模式 ──
+    ThemeModeSelector(
+        current = state.themeMode,
+        onSelect = { viewModel.updateThemeMode(it) }
+    )
+
+    Spacer(Modifier.height(12.dp))
+
+    // ── 动态颜色开关 ──
+    val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    SettingsSwitchRow(
+        label = "使用系统动态颜色",
+        description = if (dynamicColorSupported) "关闭后可选择预设主题色" else "当前系统不支持动态颜色",
+        checked = state.enableDynamicColor && dynamicColorSupported,
+        darkTheme = darkTheme,
+        onCheckedChange = { if (dynamicColorSupported) viewModel.updateEnableDynamicColor(it) },
+        enabled = dynamicColorSupported
+    )
+
+    // ── 颜色预设选择区（关闭动态颜色时展开） ──
+    AnimatedVisibility(
+        visible = !(state.enableDynamicColor && dynamicColorSupported),
+        enter = expandVertically(),
+        exit = shrinkVertically()
+    ) {
+        ColorPresetSelector(
+            currentPreset = state.colorPreset,
+            onSelect = { viewModel.updateColorPreset(it) }
+        )
+    }
+}
+
 /** 语音：模型下载管理 + 主/悬浮窗开关 + 默认语音 + 语速。 */
 @Composable
 private fun TtsSection(
@@ -564,14 +904,13 @@ private fun TtsSection(
     viewModel: SettingsViewModel,
     darkTheme: Boolean
 ) {
-    SectionTitle("语音")
-
     val modelReady = state.ttsModelState is com.meapet.mobile.tts.model.TtsModelState.Ready
 
     // ── 语音模型管理 ──
     TtsModelCard(state, viewModel)
 
     Spacer(Modifier.height(8.dp))
+    SectionTitle("发声")
 
     // ── 发声开关（模型未就绪时置灰）──
     SettingsSwitchRow(
@@ -622,9 +961,16 @@ private fun TtsSection(
     )
 }
 
-/** 语音模型下载状态卡：状态显示 + 下载/进度/删除。 */
+/** 语音模型下载状态卡：状态显示 + 下载/导入/进度/删除。 */
 @Composable
 private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
+    // 从本地 zip 资源包手动导入（绕过 GitHub 下载）
+    val pickZip = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importTtsModelZip(it) }
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -654,6 +1000,16 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                     Spacer(Modifier.height(8.dp))
                     LinearProgressLike(progress = st.progress)
                 }
+                is com.meapet.mobile.tts.model.TtsModelState.Importing -> {
+                    Text("正在导入语音模型…", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "正在解压资源包，请稍候",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
                 is com.meapet.mobile.tts.model.TtsModelState.Error -> {
                     Text("下载失败", style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -662,21 +1018,33 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { viewModel.downloadTtsModel() }) { Text("重试") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.downloadTtsModel() }) { Text("重试") }
+                        OutlinedButton(onClick = { pickZip.launch(arrayOf("application/zip", "application/octet-stream")) }) {
+                            Text("从本地导入")
+                        }
+                    }
                 }
                 is com.meapet.mobile.tts.model.TtsModelState.NotDownloaded -> {
                     Text("语音模型未下载", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        if (state.ttsModelUrlConfigured) "约 92MB（模型 + 运行库），下载后开放语音功能"
-                        else "未配置模型下载地址",
+                        if (state.ttsModelUrlConfigured)
+                            "约 92MB（模型 + 运行库），下载后开放语音功能；网络受限可从本地 zip 导入"
+                        else
+                            "未配置模型下载地址，可从本地 zip 导入",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.downloadTtsModel() },
-                        enabled = state.ttsModelUrlConfigured
-                    ) { Text("下载模型") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.downloadTtsModel() },
+                            enabled = state.ttsModelUrlConfigured
+                        ) { Text("下载模型") }
+                        OutlinedButton(
+                            onClick = { pickZip.launch(arrayOf("application/zip", "application/octet-stream")) }
+                        ) { Text("从本地导入") }
+                    }
                 }
             }
         }
@@ -719,44 +1087,20 @@ private fun FilterChipLike(
     }
 }
 
-/** 主题：模式选择 + 动态颜色开关 + 颜色预设。 */@Composable
-private fun ThemeSection(
+/** 更新：启动自动检查开关。 */
+@Composable
+private fun UpdateSection(
     state: SettingsUiState,
     viewModel: SettingsViewModel,
     darkTheme: Boolean
 ) {
-    SectionTitle("主题")
-
-    // ── 主题模式 ──
-    ThemeModeSelector(
-        current = state.themeMode,
-        onSelect = { viewModel.updateThemeMode(it) }
-    )
-
-    Spacer(Modifier.height(12.dp))
-
-    // ── 动态颜色开关 ──
-    val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     SettingsSwitchRow(
-        label = "使用系统动态颜色",
-        description = if (dynamicColorSupported) "关闭后可选择预设主题色" else "当前系统不支持动态颜色",
-        checked = state.enableDynamicColor && dynamicColorSupported,
+        label = "启动时自动检查更新",
+        description = "打开 App 时静默检测新版本，发现更新才会提示；关闭后仅可在关于页手动检查",
+        checked = state.enableAutoUpdateCheck,
         darkTheme = darkTheme,
-        onCheckedChange = { if (dynamicColorSupported) viewModel.updateEnableDynamicColor(it) },
-        enabled = dynamicColorSupported
+        onCheckedChange = { viewModel.updateEnableAutoUpdateCheck(it) }
     )
-
-    // ── 颜色预设选择区（关闭动态颜色时展开） ──
-    AnimatedVisibility(
-        visible = !(state.enableDynamicColor && dynamicColorSupported),
-        enter = expandVertically(),
-        exit = shrinkVertically()
-    ) {
-        ColorPresetSelector(
-            currentPreset = state.colorPreset,
-            onSelect = { viewModel.updateColorPreset(it) }
-        )
-    }
 }
 
 /** 隐私与数据：查看隐私政策 + 友盟采集授权管理。 */
@@ -767,8 +1111,6 @@ private fun PrivacySection(
     onOpenPrivacyPolicy: () -> Unit,
     onExitApp: () -> Unit
 ) {
-    SectionTitle("隐私与数据")
-
     // 响应式读取授权状态（由 SettingsViewModel 订阅 PrivacyConsentManager.agreedFlow 维护）
     val umengAgreed = state.privacyAgreed
     var showRevokeDialog by remember { mutableStateOf(false) }
@@ -915,13 +1257,46 @@ private fun PrivacySection(
 //  通用子组件
 // ═══════════════════════════════════════════════════
 
+/**
+ * 设置分组卡片：带组标题的圆角 Surface 容器。
+ *
+ * 设置界面按功能域分组（对话 / 外观 / 语音 / 更新 / 隐私与数据），
+ * 组内由各 Section 组件用 [SectionTitle] 细分小节。
+ */
+@Composable
+private fun SettingsGroup(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(top = 20.dp, bottom = 8.dp)
+    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = ALPHA_CARD_BG),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            content()
+        }
+    }
+}
+
 @Composable
 private fun SectionTitle(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.primary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 8.dp)
     )
 }

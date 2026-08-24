@@ -1,6 +1,5 @@
 package com.meapet.mobile.ui.component
 
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,11 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,23 +35,26 @@ import com.meapet.mobile.chat.ChatRole
  *
  * @param message 消息
  * @param modifier Modifier
+ * @param alpha 气泡整体透明度（0.2~1.0，1.0 不透明），主页聊天列表可调
  */
 @Composable
 fun ChatBubble(
     message: ChatMessage,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    alpha: Float = 1f
 ) {
     when (message.role) {
-        ChatRole.user -> UserBubble(message, modifier)
-        ChatRole.assistant -> AssistantBubble(message, modifier)
-        ChatRole.system -> SystemBanner(message, modifier)
+        ChatRole.user -> UserBubble(message, modifier, alpha)
+        ChatRole.assistant -> AssistantBubble(message, modifier, alpha)
+        ChatRole.system -> SystemBanner(message, modifier, alpha)
     }
 }
 
 @Composable
 private fun UserBubble(
     message: ChatMessage,
-    modifier: Modifier
+    modifier: Modifier,
+    alpha: Float
 ) {
     Row(
         modifier = modifier
@@ -66,12 +66,12 @@ private fun UserBubble(
             modifier = Modifier
                 .widthIn(max = 280.dp)
                 .clip(RoundedCornerShape(16.dp, 4.dp, 16.dp, 16.dp))
-                .background(MaterialTheme.colorScheme.primary)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
                 .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Text(
                 text = message.content,
-                color = MaterialTheme.colorScheme.onPrimary,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = alpha),
                 style = MaterialTheme.typography.bodyMedium,
                 lineHeight = 22.sp
             )
@@ -82,7 +82,8 @@ private fun UserBubble(
 @Composable
 private fun AssistantBubble(
     message: ChatMessage,
-    modifier: Modifier
+    modifier: Modifier,
+    alpha: Float
 ) {
     Row(
         modifier = modifier
@@ -96,14 +97,14 @@ private fun AssistantBubble(
             modifier = Modifier
                 .size(28.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = alpha)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "M",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = alpha)
             )
         }
 
@@ -114,12 +115,12 @@ private fun AssistantBubble(
                 modifier = Modifier
                     .widthIn(max = 280.dp)
                     .clip(RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha))
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 Text(
                     text = message.content,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = 22.sp
                 )
@@ -131,7 +132,7 @@ private fun AssistantBubble(
                 Text(
                     text = "正在输入...",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f * alpha),
                     modifier = Modifier.padding(start = 4.dp)
                 )
             }
@@ -142,7 +143,8 @@ private fun AssistantBubble(
 @Composable
 private fun SystemBanner(
     message: ChatMessage,
-    modifier: Modifier
+    modifier: Modifier,
+    alpha: Float
 ) {
     Box(
         modifier = modifier
@@ -153,13 +155,13 @@ private fun SystemBanner(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f))
+                .background(MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f * alpha))
                 .padding(horizontal = 12.dp, vertical = 6.dp)
         ) {
             Text(
                 text = message.content,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = alpha)
             )
         }
     }

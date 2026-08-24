@@ -12,6 +12,7 @@ import com.meapet.mobile.chat.ConversationStore
 import com.meapet.mobile.config.AppConfig
 import com.meapet.mobile.core.AppInfo
 import com.meapet.mobile.core.LifecycleManager
+import com.meapet.mobile.core.WallpaperStore
 import com.meapet.mobile.memory.MemoryManager
 import com.meapet.mobile.memory.MemoryRepository
 import com.meapet.mobile.memory.MemoryService
@@ -136,6 +137,11 @@ class AppContainer(
     /** 版本更新检测（独立 HTTP 引擎，不与用户 API Key 绑定）。 */
     val updateChecker: UpdateChecker by lazy {
         UpdateChecker(currentVersionProvider = { readAppVersion() })
+    }
+
+    /** 主界面背景壁纸导入与清理（相册 URI → filesDir）。 */
+    val wallpaperStore: WallpaperStore by lazy {
+        WallpaperStore(context)
     }
 
     /** 生命周期管理器。 */

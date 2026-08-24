@@ -37,6 +37,21 @@ class Live2dOverlayRenderer(
     private var modelLoaded = false
 
     /**
+     * 悬浮窗整体不透明度（0.0~1.0）。
+     *
+     * 主线程写入（透明度滑杆回调），GL 线程在 onDrawFrame 每帧读取并应用到渲染器，
+     * 经 volatile 保证可见性。走 GL 绘制管线内乘 alpha，绕开 SurfaceView 的
+     * View.setAlpha 在部分机型合成路径上无效的问题。
+     */
+    @Volatile
+    private var opacity = 1f
+
+    /** 设置悬浮窗整体不透明度（0.0~1.0，主线程调用）。 */
+    fun setOpacity(alpha: Float) {
+        opacity = alpha.coerceIn(0f, 1f)
+    }
+
+    /**
      * 释放模型持有的 native 内存（moc/model）与 renderer。
      * 必须在 GL 线程调用（经 GLSurfaceView.queueEvent），且需在 onPause
      * 释放 EGL 上下文之前入队，保证 renderer 的 GL 删除操作仍有有效上下文。
@@ -117,6 +132,8 @@ class Live2dOverlayRenderer(
             }
 
             m.update()
+            // 悬浮窗整体不透明度：每帧同步到渲染器（GL 内乘 alpha，所有机型统一生效）
+            m.setRenderingOpacity(opacity)
             m.draw(projection)
 
             CubismOffscreenManagerAndroid.getInstance().endFrameProcess()

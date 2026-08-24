@@ -78,6 +78,10 @@ class SettingsViewModelTest {
         whenever(settingsManager.isTtsMainEnabled()).thenReturn(false)
         whenever(settingsManager.isTtsOverlayEnabled()).thenReturn(false)
         whenever(settingsManager.getTtsLengthScale()).thenReturn(1.0)
+        whenever(settingsManager.getChatBubbleAlpha()).thenReturn(1.0)
+        whenever(settingsManager.isAutoUpdateCheckEnabled()).thenReturn(true)
+        whenever(settingsManager.getWallpaperPath()).thenReturn("")
+        whenever(settingsManager.getWallpaperBlur()).thenReturn(0.0)
 
         // TTS 模型管理器（state 流）
         whenever(ttsModelManager.state).thenReturn(MutableStateFlow(TtsModelState.NotDownloaded))
@@ -98,6 +102,10 @@ class SettingsViewModelTest {
         whenever(settingsManager.ttsMainEnabledFlow).thenReturn(MutableStateFlow(false))
         whenever(settingsManager.ttsOverlayEnabledFlow).thenReturn(MutableStateFlow(false))
         whenever(settingsManager.ttsLengthScaleFlow).thenReturn(MutableStateFlow(1.0))
+        whenever(settingsManager.chatBubbleAlphaFlow).thenReturn(MutableStateFlow(1.0))
+        whenever(settingsManager.enableAutoUpdateCheckFlow).thenReturn(MutableStateFlow(true))
+        whenever(settingsManager.wallpaperPathFlow).thenReturn(MutableStateFlow(""))
+        whenever(settingsManager.wallpaperBlurFlow).thenReturn(MutableStateFlow(0.0))
     }
 
     @After

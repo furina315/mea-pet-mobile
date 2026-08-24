@@ -161,6 +161,17 @@ class Live2dModel(modelDirName: String) : CubismUserModel() {
     }
 
     /**
+     * 设置渲染器级整体不透明度（0.0~1.0），悬浮窗透明度调节使用。
+     *
+     * 在 GL 线程每帧调用；透明度经 CubismShaderAndroid 的 u_baseColor 乘进
+     * 绘制管线，对所有机型的合成路径统一生效（GLSurfaceView 的 View.setAlpha
+     * 在部分机型上不进入 GL Surface 合成，详见 FloatingLive2dService）。
+     */
+    fun setRenderingOpacity(alpha: Float) {
+        castRenderer<CubismRendererAndroid>().setOpacity(alpha)
+    }
+
+    /**
      * 根据触摸位置直接设置模型角度和视线参数。
      * 绕过 Cubism Look 系统，更可靠地实现视角跟随。
      *

@@ -1,6 +1,7 @@
 package com.meapet.mobile.tts.model
 
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import io.ktor.client.HttpClient
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.zip.ZipInputStream
 
 /**
  * TTS 模型与 ONNX Runtime 原生库的下载 / 校验 / 加载管理。
@@ -245,6 +247,172 @@ class TtsModelManager(private val context: Context) {
         }
         if (target.exists()) target.delete()
         if (!tmp.renameTo(target)) throw IllegalStateException("落盘失败：${file.relativePath}")
+    }
+
+    /**
+     * 从本地 zip 资源包手动导入（绕过 GitHub 下载，供网络受限用户使用）。
+     *
+     * 约定格式：zip 内**平铺无目录**——
+     * - 4 个 ONNX：`enc_p.onnx` / `dp.onnx` / `flow.onnx` / `dec.onnx`；
+     * - 各 ABI 的 ONNX Runtime 原生库：`libonnxruntime-<abi>.so`（下载约定同名）。
+     *
+     * 兼容打包时误嵌套子文件夹的情况：根级没有资源文件时，自动到子目录查找
+     * （最多 2 层），取第一个命中的资源所在目录作为基准，其余目录忽略。
+     *
+     * 导入规则：**ONNX 全导入**；**so 按当前设备 ABI（[deviceAbi]）选择性导入**，
+     * 只落盘匹配的那一份到 `lib/<abi>/libonnxruntime.so`，其余 ABI 的 so 跳过。
+     *
+     * 逐文件 `.part` 临时写盘后原子改名（与 [download] 一致，中断不留半文件）；
+     * 完成后 [refreshState]，缺件/失败进 [TtsModelState.Error] 并列出缺项。
+     */
+    suspend fun importFromZip(uri: Uri): Result<String> = withContext(Dispatchers.IO) {
+        _state.value = TtsModelState.Importing
+        try {
+            val resolver = context.contentResolver
+            val stream = resolver.openInputStream(uri)
+                ?: return@withContext Result.failure(IllegalStateException("无法读取所选文件"))
+
+            // 第一遍：列出全部条目，确定资源所在基准目录（根级优先，最多下探 2 层）
+            val entries = ZipInputStream(stream).use { zis ->
+                buildList {
+                    while (true) {
+                        val entry = zis.nextEntry ?: break
+                        if (!entry.isDirectory) add(entry.name)
+                        zis.closeEntry()
+                    }
+                }
+            }
+            if (entries.isEmpty()) {
+                return@withContext Result.failure(IllegalStateException("zip 为空或无法解析"))
+            }
+            val baseDir = resolveBaseDir(entries)   // "" = 根级平铺
+            val resolve = { name: String ->
+                val rel = name.removePrefix(if (baseDir.isEmpty()) "" else "$baseDir/")
+                if (rel.contains('/')) null else rel
+            }
+
+            // 写入目标：先清理旧文件再解压，防止残留半套模型/库
+            modelDir.mkdirs()
+            nativeLibDir.mkdirs()
+            modelDir.listFiles()?.forEach { if (it.isFile) it.delete() }
+            nativeLibDir.listFiles()?.forEach { if (it.isFile) it.delete() }
+
+            val seenModels = mutableSetOf<String>()
+            var seenNativeForDevice = false
+            val maxEntrySize = 256L * 1024 * 1024   // 单条目上限（zip 炸弹粗防御）
+
+            resolver.openInputStream(uri).use { input ->
+                val zis = ZipInputStream(input)
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val entry = zis.nextEntry ?: break
+                    val name = entry.name
+                    if (entry.isDirectory) { zis.closeEntry(); continue }
+                    val rel = resolve(name) ?: run { zis.closeEntry(); continue }
+
+                    when {
+                        rel in REQUIRED_MODEL_FILES -> {
+                            writeEntry(zis, File(modelDir, rel), maxEntrySize, buf)
+                            seenModels.add(rel)
+                        }
+                        else -> {
+                            val abi = abiFromNativeName(rel)
+                            // 只导入当前设备 ABI 的原生库
+                            if (abi != null && abi == deviceAbi) {
+                                writeEntry(zis, nativeLibFile, maxEntrySize, buf)
+                                seenNativeForDevice = true
+                            }
+                            // 其他 ABI 的 so 或未知条目：跳过不解压
+                        }
+                    }
+                    zis.closeEntry()
+                }
+            }
+
+            val missing = REQUIRED_MODEL_FILES.filterNot { it in seenModels }
+            refreshState()
+            when {
+                _state.value == TtsModelState.Ready -> {
+                    Log.i(TAG, "zip 导入完成：${seenModels.size} 个 onnx，native=$seenNativeForDevice")
+                    Result.success("导入成功")
+                }
+                missing.isNotEmpty() -> {
+                    val msg = "资源包缺少模型：${missing.joinToString("、")}"
+                    _state.value = TtsModelState.Error(msg)
+                    Result.failure(IllegalStateException(msg))
+                }
+                !seenNativeForDevice -> {
+                    val msg = "资源包缺少当前设备（$deviceAbi）的 native 库 libonnxruntime.so"
+                    _state.value = TtsModelState.Error(msg)
+                    Result.failure(IllegalStateException(msg))
+                }
+                else -> {
+                    val msg = "导入失败：文件不完整"
+                    _state.value = TtsModelState.Error(msg)
+                    Result.failure(IllegalStateException(msg))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "zip 导入失败", e)
+            _state.value = TtsModelState.Error(e.message ?: "导入失败")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 从全部条目里确定资源所在基准目录：根级有资源文件（onnx 或 native so）就用 ""，
+     * 否则从第一层子目录开始，最多下探 2 层，取第一个命中的目录；找不到返回 ""。
+     */
+    private fun resolveBaseDir(entries: List<String>): String {
+        val candidateDirs = mutableListOf("")
+        entries.map { it.substringBefore('/') }.filter { it.isNotEmpty() }.toSet()
+            .forEach { candidateDirs.add(it) }
+        // 第一层子目录的子目录（最多 2 层）
+        entries.mapNotNull { e ->
+            val parts = e.split('/')
+            if (parts.size >= 3 && parts[0].isNotEmpty()) parts[0] + "/" + parts[1] else null
+        }.toSet().forEach { candidateDirs.add(it) }
+
+        for (dir in candidateDirs) {
+            val prefix = if (dir.isEmpty()) "" else "$dir/"
+            val hasResource = entries.any { name ->
+                val rel = name.removePrefix(prefix)
+                !rel.contains('/') &&
+                    (rel in REQUIRED_MODEL_FILES || abiFromNativeName(rel) != null)
+            }
+            if (hasResource) return dir
+        }
+        return ""
+    }
+
+    /**
+     * 从 `libonnxruntime-<abi>.so` 解析 ABI；非 native 库名（含裸 `libonnxruntime.so`，无 ABI 信息）返回 null。
+     * 例：`libonnxruntime-arm64-v8a.so` → `arm64-v8a`。
+     */
+    private fun abiFromNativeName(name: String): String? {
+        // 仅当「不带 ABI 后缀」时无 ABI 可解析；带后缀的文件名不以裸 NATIVE_LIB 结尾
+        if (name == NATIVE_LIB) return null
+        if (!name.startsWith("libonnxruntime-")) return null
+        val abi = name.removePrefix("libonnxruntime-").removeSuffix(".so")
+        return abi.takeIf { it in NATIVE_LIB_SIZES }
+    }
+
+    /** 把当前 zip entry 逐块写入目标文件（`.part` 临时文件 + 原子改名）。 */
+    private fun writeEntry(zis: ZipInputStream, target: File, maxSize: Long, buf: ByteArray) {
+        target.parentFile?.mkdirs()
+        val tmp = File(target.parentFile, target.name + ".part")
+        tmp.outputStream().buffered().use { out ->
+            var total = 0L
+            while (true) {
+                val n = zis.read(buf, 0, buf.size)
+                if (n < 0) break
+                total += n
+                if (total > maxSize) throw IllegalStateException("文件过大：${target.name}")
+                out.write(buf, 0, n)
+            }
+        }
+        if (target.exists()) target.delete()
+        if (!tmp.renameTo(target)) throw IllegalStateException("落盘失败：${target.name}")
     }
 
     /** 删除模型与原生库，释放空间；调用方负责随后关闭语音开关。 */
