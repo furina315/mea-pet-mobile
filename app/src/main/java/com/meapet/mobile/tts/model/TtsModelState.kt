@@ -5,12 +5,14 @@ package com.meapet.mobile.tts.model
  *
  * - [NotDownloaded] 未下载：语音开关置灰，仅显示「下载」入口
  * - [Downloading] 下载中：[progress] 为 0f~1f 总进度
+ * - [Importing] 从本地 zip 导入中（解压无逐文件进度，显示等待态）
  * - [Ready] 就绪：语音功能开放
  * - [Error] 失败：展示原因，可重试
  */
 sealed interface TtsModelState {
     data object NotDownloaded : TtsModelState
     data class Downloading(val progress: Float, val currentFile: String) : TtsModelState
+    data object Importing : TtsModelState
     data object Ready : TtsModelState
     data class Error(val message: String) : TtsModelState
 }

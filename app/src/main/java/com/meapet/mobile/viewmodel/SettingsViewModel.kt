@@ -311,6 +311,17 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /**
+     * 从本地 zip 资源包手动导入 TTS 模型（绕过 GitHub 下载）。
+     * 导入前先停播并释放引擎，避免旧 session 占用即将被覆盖的 native 库。
+     */
+    fun importTtsModelZip(uri: android.net.Uri) {
+        viewModelScope.launch {
+            container.ttsManager.releaseEngine()
+            ttsModelManager.importFromZip(uri)
+        }
+    }
+
     /** 删除模型与原生库，并强制关闭两个语音开关。 */
     fun deleteTtsModel() {
         viewModelScope.launch {

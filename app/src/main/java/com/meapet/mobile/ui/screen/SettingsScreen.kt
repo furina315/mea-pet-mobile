@@ -961,9 +961,16 @@ private fun TtsSection(
     )
 }
 
-/** 语音模型下载状态卡：状态显示 + 下载/进度/删除。 */
+/** 语音模型下载状态卡：状态显示 + 下载/导入/进度/删除。 */
 @Composable
 private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
+    // 从本地 zip 资源包手动导入（绕过 GitHub 下载）
+    val pickZip = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importTtsModelZip(it) }
+    }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -993,6 +1000,16 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                     Spacer(Modifier.height(8.dp))
                     LinearProgressLike(progress = st.progress)
                 }
+                is com.meapet.mobile.tts.model.TtsModelState.Importing -> {
+                    Text("正在导入语音模型…", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "正在解压资源包，请稍候",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
                 is com.meapet.mobile.tts.model.TtsModelState.Error -> {
                     Text("下载失败", style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -1001,21 +1018,33 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                         color = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = { viewModel.downloadTtsModel() }) { Text("重试") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { viewModel.downloadTtsModel() }) { Text("重试") }
+                        OutlinedButton(onClick = { pickZip.launch(arrayOf("application/zip", "application/octet-stream")) }) {
+                            Text("从本地导入")
+                        }
+                    }
                 }
                 is com.meapet.mobile.tts.model.TtsModelState.NotDownloaded -> {
                     Text("语音模型未下载", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        if (state.ttsModelUrlConfigured) "约 92MB（模型 + 运行库），下载后开放语音功能"
-                        else "未配置模型下载地址",
+                        if (state.ttsModelUrlConfigured)
+                            "约 92MB（模型 + 运行库），下载后开放语音功能；网络受限可从本地 zip 导入"
+                        else
+                            "未配置模型下载地址，可从本地 zip 导入",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
-                        onClick = { viewModel.downloadTtsModel() },
-                        enabled = state.ttsModelUrlConfigured
-                    ) { Text("下载模型") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { viewModel.downloadTtsModel() },
+                            enabled = state.ttsModelUrlConfigured
+                        ) { Text("下载模型") }
+                        OutlinedButton(
+                            onClick = { pickZip.launch(arrayOf("application/zip", "application/octet-stream")) }
+                        ) { Text("从本地导入") }
+                    }
                 }
             }
         }
