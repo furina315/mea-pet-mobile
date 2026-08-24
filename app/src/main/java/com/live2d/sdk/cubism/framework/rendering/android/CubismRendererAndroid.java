@@ -1107,6 +1107,29 @@ public class CubismRendererAndroid extends CubismRenderer {
     }
 
     /**
+     * 渲染器级整体不透明度（0.0~1.0）。
+     *
+     * 悬浮窗 Live2D 透明度调节走 GL 绘制管线内乘 alpha（见
+     * {@link CubismShaderAndroid#setupShaderProgramForDrawable}），而不是
+     * {@code View.setAlpha}：GLSurfaceView 的画面绘制在独立 Surface 上，View 层
+     * alpha 只作用于占位层，在部分机型（含大量 Android 10+ 国产 ROM）的合成路径上
+     * 不进入 GL 像素，导致调透明度无效。GL 内乘 alpha 对所有机型统一生效。
+     *
+     * 由悬浮窗服务经 GL 线程写入，默认 1.0（不透明）。
+     */
+    private volatile float opacity = 1.0f;
+
+    /** 获取渲染器级整体不透明度（0.0~1.0）。 */
+    public float getOpacity() {
+        return opacity;
+    }
+
+    /** 设置渲染器级整体不透明度（0.0~1.0）。 */
+    public void setOpacity(float value) {
+        this.opacity = Math.max(0.0f, Math.min(1.0f, value));
+    }
+
+    /**
      * マスク生成時かどうかを判定する。
      *
      * @return マスク生成時かどうか。生成時ならtrue。

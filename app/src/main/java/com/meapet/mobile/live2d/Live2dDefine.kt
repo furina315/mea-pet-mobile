@@ -59,8 +59,28 @@ object Live2dDefine {
             varying vec2 vuv;
             uniform sampler2D texture;
             uniform vec4 baseColor;
+            uniform float uBlur;
+            uniform vec2 uTexSize;
             void main(void) {
-                gl_FragColor = texture2D(texture, vuv) * baseColor;
+                vec4 color = texture2D(texture, vuv);
+                if (uBlur > 0.001) {
+                    // 9-tap 高斯模糊（近似 3x3）。偏移随模糊强度线性放大，
+                    // 归一化到纹理尺寸避免采样溢出。blur=0 时分支不执行，退化为原采样。
+                    vec2 texel = vec2(1.0) / uTexSize;
+                    float radius = 1.0 + uBlur * 5.0;
+                    vec2 off = texel * radius;
+                    vec4 sum = color;
+                    sum += texture2D(texture, vuv + vec2(-off.x, -off.y));
+                    sum += texture2D(texture, vuv + vec2( 0.0,   -off.y));
+                    sum += texture2D(texture, vuv + vec2( off.x, -off.y));
+                    sum += texture2D(texture, vuv + vec2(-off.x,  0.0));
+                    sum += texture2D(texture, vuv + vec2( off.x,  0.0));
+                    sum += texture2D(texture, vuv + vec2(-off.x,  off.y));
+                    sum += texture2D(texture, vuv + vec2( 0.0,    off.y));
+                    sum += texture2D(texture, vuv + vec2( off.x,  off.y));
+                    color = sum / 9.0;
+                }
+                gl_FragColor = color * baseColor;
             }
         """.trimIndent()
     }

@@ -60,11 +60,13 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.viewmodel.ChatEvent
 import com.meapet.mobile.chat.ChatUiState
 import com.meapet.mobile.chat.MemoryDialogUi
 import com.meapet.mobile.core.AppInfo
 import com.meapet.mobile.memory.MemoryType
+import com.meapet.mobile.settings.SettingsKeys
 import com.meapet.mobile.ui.component.ChatBubble
 import com.meapet.mobile.ui.component.ChatInputBar
 import com.meapet.mobile.ui.component.LinkItem
@@ -172,6 +174,15 @@ private fun ChatPage(
     var showAbout by remember { mutableStateOf(false) }
     var showDialog by remember { mutableStateOf(false) }
 
+    // 主页聊天气泡透明度：订阅设置流（默认 1.0 不透明），实时反映设置页的滑杆
+    val context = LocalContext.current
+    val bubbleAlphaFlow = remember(context) {
+        (context.applicationContext as MeaPetApplication).container.settingsManager
+            .chatBubbleAlphaFlow
+    }
+    val bubbleAlphaState = bubbleAlphaFlow.collectAsState(initial = SettingsKeys.Defaults.CHAT_BUBBLE_ALPHA)
+    val bubbleAlpha = bubbleAlphaState.value.toFloat()
+
     // 延迟移除 Dialog，为退出动画留出时间
     LaunchedEffect(showAbout) {
         if (showAbout) {
@@ -243,7 +254,8 @@ private fun ChatPage(
         // ── Layer 1: 消息列表 ──
         MessageList(
             state = state,
-            listState = listState
+            listState = listState,
+            bubbleAlpha = bubbleAlpha
         )
 
         // ── Layer 2: 顶部菜单 ──
@@ -316,7 +328,8 @@ private fun ChatPage(
 @Composable
 private fun MessageList(
     state: ChatUiState,
-    listState: LazyListState
+    listState: LazyListState,
+    bubbleAlpha: Float
 ) {
     LazyColumn(
         state = listState,
@@ -347,7 +360,7 @@ private fun MessageList(
             items = state.messages,
             key = { it.id }
         ) { message ->
-            ChatBubble(message = message)
+            ChatBubble(message = message, alpha = bubbleAlpha)
         }
 
         if (state.isLoading) {

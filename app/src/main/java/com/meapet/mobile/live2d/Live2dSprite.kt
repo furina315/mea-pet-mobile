@@ -27,11 +27,14 @@ class Live2dSprite(
     private val uvLocation: Int = GLES20.glGetAttribLocation(programId, "uv")
     private val textureLocation: Int = GLES20.glGetUniformLocation(programId, "texture")
     private val colorLocation: Int = GLES20.glGetUniformLocation(programId, "baseColor")
+    private val blurLocation: Int = GLES20.glGetUniformLocation(programId, "uBlur")
+    private val texSizeLocation: Int = GLES20.glGetUniformLocation(programId, "uTexSize")
 
     /** Whether the sprite shader has valid attribute locations */
     private val valid: Boolean = positionLocation >= 0 && uvLocation >= 0
 
     private val spriteColor = floatArrayOf(1.0f, 1.0f, 1.0f, 1.0f)
+    private var blurAmount = 0f
     private var maxWidth = 0
     private var maxHeight = 0
 
@@ -72,8 +75,20 @@ class Live2dSprite(
             spriteColor[0], spriteColor[1], spriteColor[2], spriteColor[3]
         )
 
+        if (blurLocation >= 0) {
+            GLES20.glUniform1f(blurLocation, blurAmount)
+        }
+        if (texSizeLocation >= 0) {
+            GLES20.glUniform2f(texSizeLocation, maxWidth.toFloat(), maxHeight.toFloat())
+        }
+
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, 4)
+    }
+
+    /** 设置高斯模糊强度（0~1，0 = 不模糊），配合 ShaderSource 的 9-tap 采样。 */
+    fun setBlur(amount: Float) {
+        blurAmount = amount.coerceIn(0f, 1f)
     }
 
     fun resize(x: Float, y: Float, width: Float, height: Float) {

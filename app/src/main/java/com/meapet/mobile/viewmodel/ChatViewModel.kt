@@ -115,21 +115,24 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 启动时静默检测一次：仅在有新版本时提示，失败不打扰
-        viewModelScope.launch {
-            when (val result = updateChecker.check()) {
-                is UpdateCheckResult.UpdateAvailable -> {
-                    _state.update {
-                        it.copy(
-                            updateNotice = UpdateNoticeUi(
-                                message = "发现新版本 v${result.release.versionName}",
-                                url = result.release.htmlUrl
+        // 启动时静默检测一次：仅在有新版本时提示，失败不打扰。
+        // 受设置页「启动自动检查更新」开关控制（默认开启）。
+        if (container.settingsManager.isAutoUpdateCheckEnabled()) {
+            viewModelScope.launch {
+                when (val result = updateChecker.check()) {
+                    is UpdateCheckResult.UpdateAvailable -> {
+                        _state.update {
+                            it.copy(
+                                updateNotice = UpdateNoticeUi(
+                                    message = "发现新版本 v${result.release.versionName}",
+                                    url = result.release.htmlUrl
+                                )
                             )
-                        )
+                        }
                     }
+                    is UpdateCheckResult.UpToDate,
+                    is UpdateCheckResult.Failed -> Unit
                 }
-                is UpdateCheckResult.UpToDate,
-                is UpdateCheckResult.Failed -> Unit
             }
         }
     }

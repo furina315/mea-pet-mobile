@@ -1,6 +1,5 @@
 package com.meapet.mobile.viewmodel
 
-import android.app.Application
 import com.meapet.mobile.chat.ChatMessage
 import com.meapet.mobile.chat.ChatRole
 import com.meapet.mobile.chat.ChatService
@@ -9,6 +8,7 @@ import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.memory.MemoryItem
 import com.meapet.mobile.memory.MemoryManager
 import com.meapet.mobile.memory.MemoryStats
+import com.meapet.mobile.settings.SettingsManager
 import com.meapet.mobile.tts.TtsManager
 import com.meapet.mobile.update.UpdateCheckResult
 import com.meapet.mobile.update.UpdateChecker
@@ -27,7 +27,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito
-import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -51,6 +50,7 @@ class ChatViewModelTest {
     private lateinit var memoryManager: MemoryManager
     private lateinit var updateChecker: UpdateChecker
     private lateinit var ttsManager: TtsManager
+    private lateinit var settingsManager: SettingsManager
 
     @Before
     fun setUp() {
@@ -61,11 +61,13 @@ class ChatViewModelTest {
         memoryManager = mock()
         updateChecker = mock()
         ttsManager = mock()
+        settingsManager = mock()
         // AppContainer 属性为 by lazy，whenever(getter) 会拿到 null；用 doReturn 直接设定
         Mockito.doReturn(chatService).`when`(container).chatService
         Mockito.doReturn(memoryManager).`when`(container).memoryManager
         Mockito.doReturn(updateChecker).`when`(container).updateChecker
         Mockito.doReturn(ttsManager).`when`(container).ttsManager
+        Mockito.doReturn(settingsManager).`when`(container).settingsManager
         Mockito.doReturn(Job().apply { complete() }).`when`(container).warmUpJob
         wheneverBlocking { updateChecker.check() }.thenReturn(UpdateCheckResult.UpToDate("1.0.0"))
         wheneverBlocking { memoryManager.getStats() }.thenReturn(MemoryStats())
