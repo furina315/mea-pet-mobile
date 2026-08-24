@@ -82,6 +82,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -141,9 +142,9 @@ private const val SUMMARY_INTERVAL_STEPS = 26
 private val CHAT_BUBBLE_ALPHA_RANGE = 0.2f..1.0f
 private const val CHAT_BUBBLE_ALPHA_STEPS = 15
 
-/** 背景壁纸模糊滑杆：0~1，0 = 不模糊。 */
+/** 背景壁纸模糊滑杆：0~1，0 = 不模糊；steps=20 → 区间均分 20 段，每段恰 0.05。 */
 private val WALLPAPER_BLUR_RANGE = 0f..1f
-private const val WALLPAPER_BLUR_STEPS = 20
+private const val WALLPAPER_BLUR_STEPS = 19
 
 /**
  * 语速滑杆：显示/拖动的是「语速倍率 speed」（0.5=半速慢、2.0=双倍速快），
@@ -620,21 +621,49 @@ private fun BackgroundWallpaperSection(
         uri?.let { viewModel.importWallpaper(it) }
     }
 
-    // 缩略图预览：仅当路径非空时按需解码，天然随 wallpaperPath 流刷新
-    val thumb by produceState<Bitmap?>(initialValue = null, state.wallpaperPath) {
-        value = if (state.wallpaperPath.isBlank()) null
+    // ── 模糊强度（本地拖动状态）──
+    // 仅在有壁纸时启用。用本地 remember 拖动顺滑，松手才落盘（与语速/透明度一致）。
+    // 先于预览声明，让预览在拖动时实时跟随。
+    val blur = state.wallpaperBlur.toFloat().coerceIn(0f, 1f)
+    var localBlur by remember { mutableStateOf(blur) }
+    LaunchedEffect(state.wallpaperBlur) {
+        if (localBlur != state.wallpaperBlur.toFloat()) {
+            localBlur = state.wallpaperBlur.toFloat()
+        }
+    }
+
+    // 源缩略图（未模糊）：路径不变就复用，避免随滑杆拖动反复解码原图
+    var sourceThumb by remember { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(state.wallpaperPath) {
+        sourceThumb = if (state.wallpaperPath.isBlank()) null
         else withContext(Dispatchers.IO) { decodeThumbnail(state.wallpaperPath, 480) }
+    }
+
+    // 实时预览：模糊强度（localBlur）变化即在 IO 线程重算；0 = 直接显示源图。
+    // σ 与 GL 渲染同源：blur→σ = 20·blur²（见 Live2dDefine.blurToSigma），再按
+    // 「缩略图宽 / 屏幕宽」等比换算，保证预览模糊观感与主界面一致。
+    val screenWidthPx = with(LocalDensity.current) {
+        LocalConfiguration.current.screenWidthDp.dp.toPx()
+    }
+    val preview by produceState<Bitmap?>(initialValue = sourceThumb, sourceThumb, localBlur) {
+        val src = sourceThumb
+        value = if (src == null || localBlur <= 0.001f) src
+        else withContext(Dispatchers.IO) {
+            val sigma = com.meapet.mobile.live2d.Live2dDefine.blurToSigma(localBlur) *
+                src.width / screenWidthPx
+            gaussianBlurBitmap(src, sigma)
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .height(160.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = ALPHA_CARD_BG)),
         contentAlignment = Alignment.Center
     ) {
-        val bmp = thumb
+        val bmp = preview
         if (bmp != null) {
             Image(
                 bitmap = bmp.asImageBitmap(),
@@ -672,18 +701,9 @@ private fun BackgroundWallpaperSection(
         }
     }
 
-    // ── 模糊强度滑杆（0~1）──
-    // 仅在有壁纸时启用。用本地 remember 拖动顺滑，松手才落盘（与语速/透明度一致）。
-    val blur = state.wallpaperBlur.toFloat().coerceIn(0f, 1f)
-    var localBlur by remember { mutableStateOf(blur) }
-    LaunchedEffect(state.wallpaperBlur) {
-        if (localBlur != state.wallpaperBlur.toFloat()) {
-            localBlur = state.wallpaperBlur.toFloat()
-        }
-    }
     Spacer(Modifier.height(8.dp))
     Text(
-        text = "背景模糊: ${(localBlur * 100).toInt()}%",
+        text = "背景模糊: ${kotlin.math.round(localBlur * 100).toInt()}%",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(
             alpha = if (state.wallpaperPath.isNotBlank()) 1f else 0.5f
@@ -714,6 +734,80 @@ private fun decodeThumbnail(path: String, maxDim: Int): Bitmap? {
         inSampleSize = sample
         inPreferredConfig = Bitmap.Config.ARGB_8888
     })
+}
+
+/**
+ * 可分离高斯模糊（CPU，两遍同轴，约 3σ 截断）。
+ *
+ * 仅在 IO 线程调用（随滑杆拖动时也会触发，保持 480px 缩略图尺度、单遍 O(n) 成本）。
+ * 内核 tap 数随 σ 自适应（与 GL 33-tap / σ≤16px 的口径一致）；σ≤0.6 时截断半径不足
+ * 1 像素，直接返回原图避免画质损失与多余开销。
+ */
+private fun gaussianBlurBitmap(src: Bitmap, sigma: Float): Bitmap {
+    val w = src.width
+    val h = src.height
+    if (sigma <= 0.6f) return src
+
+    val sigmaC = sigma.coerceIn(0.6f, 16f)
+    val radius = (sigmaC * 3f).toInt().coerceIn(1, 33)
+    val half = radius.coerceAtMost(33)
+
+    // 预计算 (2*half+1)-tap 高斯权重（对称），并归一化
+    val weights = FloatArray(2 * half + 1)
+    var sum = 0f
+    val twoSigma2 = 2f * sigmaC * sigmaC
+    for (i in -half..half) {
+        val wgt = kotlin.math.exp(-(i * i) / twoSigma2)
+        weights[i + half] = wgt
+        sum += wgt
+    }
+    for (i in weights.indices) weights[i] /= sum
+
+    val srcPx = IntArray(w * h)
+    src.getPixels(srcPx, 0, w, 0, 0, w, h)
+
+    // 第 1 遍：水平模糊
+    val tmp = IntArray(w * h)
+    for (y in 0 until h) {
+        val row = y * w
+        for (x in 0 until w) {
+            var r = 0f; var g = 0f; var b = 0f; var a = 0f
+            for (i in -half..half) {
+                val px = srcPx[row + (x + i).coerceIn(0, w - 1)]
+                val wt = weights[i + half]
+                a += ((px ushr 24) and 0xFF) * wt
+                r += ((px ushr 16) and 0xFF) * wt
+                g += ((px ushr 8) and 0xFF) * wt
+                b += (px and 0xFF) * wt
+            }
+            tmp[row + x] = ((a.toInt() and 0xFF) shl 24) or
+                ((r.toInt() and 0xFF) shl 16) or
+                ((g.toInt() and 0xFF) shl 8) or
+                (b.toInt() and 0xFF)
+        }
+    }
+
+    // 第 2 遍：垂直模糊，直接写入结果
+    val outPx = IntArray(w * h)
+    for (y in 0 until h) {
+        for (x in 0 until w) {
+            var r = 0f; var g = 0f; var b = 0f; var a = 0f
+            for (i in -half..half) {
+                val px = tmp[(y + i).coerceIn(0, h - 1) * w + x]
+                val wt = weights[i + half]
+                a += ((px ushr 24) and 0xFF) * wt
+                r += ((px ushr 16) and 0xFF) * wt
+                g += ((px ushr 8) and 0xFF) * wt
+                b += (px and 0xFF) * wt
+            }
+            outPx[y * w + x] = ((a.toInt() and 0xFF) shl 24) or
+                ((r.toInt() and 0xFF) shl 16) or
+                ((g.toInt() and 0xFF) shl 8) or
+                (b.toInt() and 0xFF)
+        }
+    }
+
+    return Bitmap.createBitmap(outPx, w, h, Bitmap.Config.ARGB_8888)
 }
 
 /** 外观：背景壁纸 + 聊天气泡透明度 + 主题（模式 / 动态颜色 / 颜色预设）。 */
