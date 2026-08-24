@@ -40,7 +40,7 @@ object Live2dDefine {
     const val PREMULTIPLIED_ALPHA_ENABLE = true
     val CUBISM_LOGGING_LEVEL = LogLevel.VERBOSE
 
-    /** 壁纸背景模糊：blur∈[0,1] → σ ∈ [0, MAX_BLUR_SIGMA_PX]。 */
+    /** 壁纸背景模糊：blur=1 时的屏幕像素 σ（全分辨率下）。 */
     const val MAX_BLUR_SIGMA_PX = 12f
 
     /**

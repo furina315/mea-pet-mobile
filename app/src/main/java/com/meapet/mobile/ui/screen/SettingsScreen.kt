@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -142,9 +143,15 @@ private const val SUMMARY_INTERVAL_STEPS = 26
 private val CHAT_BUBBLE_ALPHA_RANGE = 0.2f..1.0f
 private const val CHAT_BUBBLE_ALPHA_STEPS = 15
 
-/** 背景壁纸模糊滑杆：0~1，0 = 不模糊；steps=20 → 区间均分 20 段，每段恰 0.05。 */
+/** 背景壁纸模糊滑杆：0~1，0 = 不模糊；steps=19 → 均分 20 段，每段恰 0.05。 */
 private val WALLPAPER_BLUR_RANGE = 0f..1f
 private const val WALLPAPER_BLUR_STEPS = 19
+
+/**
+ * 壁纸预览盒纵横比（宽 / 高）。竖图源也按此比例 cover 裁剪，避免溢出盒高叠到下方按钮。
+ * 2:1 略宽于手机屏宽/盒高（约 2.2:1），视觉舒展。
+ */
+private const val PREVIEW_ASPECT_RATIO = 2f
 
 /**
  * 语速滑杆：显示/拖动的是「语速倍率 speed」（0.5=半速慢、2.0=双倍速快），
@@ -640,7 +647,7 @@ private fun BackgroundWallpaperSection(
     }
 
     // 实时预览：模糊强度（localBlur）变化即在 IO 线程重算；0 = 直接显示源图。
-    // σ 与 GL 渲染同源：blur→σ = 20·blur²（见 Live2dDefine.blurToSigma），再按
+    // σ 与 GL 渲染同源：blur→σ = 12·√blur（见 Live2dDefine.blurToSigma），再按
     // 「缩略图宽 / 屏幕宽」等比换算，保证预览模糊观感与主界面一致。
     val screenWidthPx = with(LocalDensity.current) {
         LocalConfiguration.current.screenWidthDp.dp.toPx()
@@ -655,6 +662,9 @@ private fun BackgroundWallpaperSection(
         }
     }
 
+    // 预览盒纵横比（宽 / 高）：竖图源也按盒子比例做 cover 裁剪，不溢出盒高、不叠到下方按钮。
+    // 竖图放大到宽度填满盒宽后高度远超盒高，需按比例约束（aspectRatio 锁形状），
+    // 再让 Image 在盒内居中铺满并裁掉超出的上/下部分。
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -668,7 +678,10 @@ private fun BackgroundWallpaperSection(
             Image(
                 bitmap = bmp.asImageBitmap(),
                 contentDescription = "当前壁纸",
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(PREVIEW_ASPECT_RATIO)
+                    .align(Alignment.Center),
                 contentScale = ContentScale.Crop
             )
         } else {

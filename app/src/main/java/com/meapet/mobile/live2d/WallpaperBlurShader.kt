@@ -7,11 +7,12 @@ import java.nio.ByteOrder
 import java.nio.FloatBuffer
 
 /**
- * 可分离高斯模糊着色器（单轴 9-tap）。
+ * 可分离高斯模糊着色器（单轴 33-tap）。
  *
- * 供 [WallpaperRenderer] 的两遍模糊使用：
- * - 第 1 遍水平模糊 → 半分辨率 FBO（下采样本身即低通，再叠加高斯）；
- * - 第 2 遍垂直模糊 → 画回默认帧缓冲。
+ * 供 [WallpaperRenderer] 的三遍模糊使用（均在半分辨率坐标系）：
+ * - pass 0：无模糊的线性下采样（sigma=0、radius=1 → 仅中心 tap，等价于点采样铺满）；
+ * - pass 1：水平高斯 → 中间缓冲；
+ * - pass 2：垂直高斯 → 画回默认帧缓冲（线性放大回全屏）。
  *
  * 权重在片元内实时计算并归一化，避免手工预计算表与 σ 不匹配；
  * `uDir` 决定沿水平/垂直采样，`uSize` 为输入纹理尺寸，用于把像素偏移归一化到 UV。
@@ -86,6 +87,9 @@ class WallpaperBlurShader : AutoCloseable {
     private val posBuf: FloatBuffer = newFloatBuffer(8)
     private val uvBuf: FloatBuffer = newFloatBuffer(8)
 
+    /** 恢复用：记录调用前的 program，pass 结束后 bind 回去，避免污染后续渲染（模型 blit 不 bind program）。 */
+    private val prevProgram = IntArray(1)
+
     /**
      * 以全屏四边形渲染一次高斯 pass（当前 viewport 必须已按目标尺寸设置）。
      *
@@ -109,6 +113,9 @@ class WallpaperBlurShader : AutoCloseable {
         uv: FloatArray
     ) {
         if (programId == 0) return
+        // 记录当前 program，pass 结束后恢复——后续渲染（模型 FBO blit）依赖自己当前绑定的 program
+        GLES20.glGetIntegerv(GLES20.GL_CURRENT_PROGRAM, prevProgram, 0)
+
         GLES20.glUseProgram(programId)
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, textureId)
@@ -130,6 +137,9 @@ class WallpaperBlurShader : AutoCloseable {
         GLES20.glDisableVertexAttribArray(positionLocation)
         GLES20.glDisableVertexAttribArray(uvLocation)
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0)
+
+        // 恢复上一个 program，避免污染后续渲染（模型 blit 不 bind program 就采样）
+        if (prevProgram[0] != 0) GLES20.glUseProgram(prevProgram[0])
     }
 
     override fun close() {
