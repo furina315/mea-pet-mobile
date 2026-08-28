@@ -120,6 +120,14 @@ dependencies {
     // Live2D Cubism Core
     implementation(files("libs/Live2DCubismCore.aar"))
 
+    // Markwon：AI 回复 Markdown 渲染（代码块/公式/表格/删除线/链接）
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.ext.latex)
+    implementation(libs.markwon.ext.strikethrough)
+    implementation(libs.markwon.table)
+    implementation(libs.markwon.linkify)
+    implementation(libs.markwon.inline.parser)
+
     // Ktor Client (for OpenAI client)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.cio)

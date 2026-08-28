@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -69,12 +70,16 @@ private fun UserBubble(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha))
                 .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = message.content,
-                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = alpha),
-                style = MaterialTheme.typography.bodyMedium,
-                lineHeight = 22.sp
-            )
+            // 长按弹出系统文字选择菜单（复制 / 全选）。SelectionContainer 只接管
+            // 长按选择，普通触摸仍在根布局透传给背后 Live2D，不影响立绘点击。
+            SelectionContainer {
+                Text(
+                    text = message.content,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = alpha),
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = 22.sp
+                )
+            }
         }
     }
 }
@@ -118,11 +123,13 @@ private fun AssistantBubble(
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = alpha))
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                Text(
-                    text = message.content,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = alpha),
-                    style = MaterialTheme.typography.bodyMedium,
-                    lineHeight = 22.sp
+                // 助手消息走 Markdown 渲染（代码块/公式/表格/链接），流式时自动补全未闭合围栏。
+                // TextView 已开启原生文字选择：长按弹出复制/全选菜单，与链接点击并存。
+                MarkdownText(
+                    markdown = message.content,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    alpha = alpha,
+                    isStreaming = message.isStreaming
                 )
             }
 
