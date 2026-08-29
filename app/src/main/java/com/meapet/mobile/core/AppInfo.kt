@@ -34,6 +34,15 @@ object AppInfo {
         "https://www.umeng.com/page/policy"
     }
 
+    /** 隐私政策版本号（字符串，如 "1.1"；与 DataStore 记录比对决定是否重弹窗）。 */
+    val privacyVersion: String = BuildConfig.PRIVACY_VERSION.ifBlank { "1.1" }
+
+    /** 隐私政策生效日期（展示用）。 */
+    val privacyEffectiveDate: String = BuildConfig.PRIVACY_EFFECTIVE_DATE.ifBlank { "2026-07-29" }
+
+    /** 隐私政策更新日期（展示用）。 */
+    val privacyUpdateDate: String = BuildConfig.PRIVACY_UPDATE_DATE.ifBlank { "2026-08-14" }
+
     /** 从 PackageManager 读取当前 versionName（失败回退默认）。 */
     fun readVersion(context: Context): String = try {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: DEFAULT_VERSION

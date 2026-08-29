@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ErrorBubble 错误卡片** — 对话流末尾的错误卡片取代原错误 Snackbar：`errorContainer` 底色、右上角关闭、右下角重试，跟随气泡透明度设置。错误为瞬态 UI 状态，不进 `ChatMessage` 也不写会话历史。
 - **应用信息并入关于页** — 新增 `AppInfoSection`；「更新」子页新增手动「检查更新」（按钮、进度、结果文案与发布页链接），启动静默检测仍保留。
 - **MDI 矢量图标** — Material Design Icons（Apache 2.0）批量转为 `VectorDrawable`，附 `tools/svg2vd.py`（Iconify → VectorDrawable）与 `tools/contrast_check.py`（校验 12 套预设 WCAG 对比度）两个工具脚本；关于页附署名。
+- **隐私政策版本号机制** — 新增 `app.privacyVersion` / `app.privacyEffectiveDate` / `app.privacyUpdateDate` 配置（`local.properties` → `BuildConfig` → `AppInfo`），用户已看过的隐私政策版本号（字符串，如 1.1）记录于 DataStore（`privacy_version_shown`）。启动时若记录值不等于当前版本号则重新弹出隐私政策，副标题提示「隐私政策更新」，确保政策更新后老用户重新确认；版本号、生效时间与修订时间展示于隐私政策头部。
+- **启动时「是否启用检查更新」弹窗** — 首次启动时弹出 `AutoUpdateOptInDialog`（复用 `first_launch` 标记，仅首次启动一次，与隐私版本号解耦，政策更新不再重复询问），用户选择「开启 / 不开启」启动自动检查更新，结果写入 `enable_auto_update_check`；不开启时仍可在「关于」页手动检测。
 
 ### Changed
 
@@ -37,11 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **触摸气泡色相修正** — 主题 `tertiary` 原由 `hueShift()`（交换 G/B 通道）派生，会把紫甩成绿、蓝甩成黄绿，触摸人物的小气泡底色与主题色相错位；改为 seed 的更去饱和变体（`desaturate(0.6f)`），保留同色相仅更柔和，浅色 / 深色同改。`tools/contrast_check.py` 同步更新并验证 12 套预设全部达标。
 - **预设方案补齐 surfaceContainer 系列** — 原先只设了 `background/surface/surfaceVariant`，M3 弹窗 / 菜单容器默认取的 `surfaceContainerHigh` 等未配置，回退成 `lightColorScheme()` 的默认紫调。现由各自的 `tintedBg` 逐档派生（浅色逐档压暗、深色逐档抬亮），弹窗与菜单底色跟随当前预设。
 - **触摸气泡底色加深** — `tertiaryContainer` 浅色 `lighten(0.82→0.77f)`、深色 `darken(0.6→0.55f)`，触摸提示条更醒目，对比度仍全部达标。
+- **隐私弹窗触发条件改为版本号驱动** — 由「是否已做出选择」改为：首次启动（`first_launch`）必弹；非首次则「已记录版本号 ≠ 当前构建版本号」时弹，与是否同意无关；`PrivacyConsentManager` 移除 `hasUserChosen` / `KEY_USER_CHOSEN`。弹窗判定移入 `LaunchedEffect` 异步执行，避免首帧同步读 DataStore 拖慢启动。
 
 ### Fixed
 
 - **输入栏底部亮带（浅色模式）** — Compose 把投影与填充放在同一 `RenderNode`，填充 0.85 透明度时投影渗入内部压暗大部分区域，未被覆盖的一条反而是唯一正确的颜色；将 `shadowElevation` 从 16dp 改为 0dp 解决。
-- **从隐私政策页返回弹回设置根页** — 政策页由顶层 `Page.PRIVACY` 下移为设置子页 `SettingsPage.POLICY`，返回正确回到「关于」。
 
 ### Notes
 

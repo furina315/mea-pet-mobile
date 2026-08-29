@@ -110,17 +110,17 @@ private fun PrivacyHeader() {
         modifier = Modifier.padding(bottom = 8.dp)
     ) {
         Text(
-            "版本：1.1",
+            "版本：${AppInfo.privacyVersion}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "生效时间：2026-07-29",
+            "生效时间：${AppInfo.privacyEffectiveDate}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "修订时间：2026-08-14",
+            "修订时间：${AppInfo.privacyUpdateDate}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

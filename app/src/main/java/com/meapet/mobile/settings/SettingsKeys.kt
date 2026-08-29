@@ -36,6 +36,14 @@ object SettingsKeys {
     /** 启动时自动检查更新（默认开启；关闭后仅在关于页手动检测）。 */
     const val ENABLE_AUTO_UPDATE_CHECK = "enable_auto_update_check"
 
+    // ── 隐私政策 ──────────────────────────────────────
+    /**
+     * 用户最近一次已看过/已处理的隐私政策版本号。
+     * 启动时若该值不等于 BuildConfig.PRIVACY_VERSION，则重新弹出隐私政策
+     * 与「是否启用检查更新」弹窗。
+     */
+    const val PRIVACY_VERSION_SHOWN = "privacy_version_shown"
+
     // ── 背景壁纸 ────────────────────────────────────
     /** 主界面背景壁纸文件绝对路径；空串 = 默认纯色背景。 */
     const val WALLPAPER_PATH = "wallpaper_path"
@@ -72,6 +80,10 @@ object SettingsKeys {
 
         // 更新
         const val ENABLE_AUTO_UPDATE_CHECK = true
+
+        // 隐私政策
+        /** 已看过/已处理的隐私政策版本号；空串表示从未处理（首次启动）。 */
+        const val PRIVACY_VERSION_SHOWN = ""
 
         // 背景壁纸
         const val WALLPAPER_PATH = ""
