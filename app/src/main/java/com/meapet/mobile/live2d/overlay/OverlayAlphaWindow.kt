@@ -105,9 +105,9 @@ class OverlayAlphaWindow(
             splitTrack = false
         }
 
-        // 关闭按钮（右上角 ×）
+        // 关闭按钮（右上角 ×，MDI close 图标）
         val closeButton = ImageView(ctx).apply {
-            setImageResource(R.drawable.ic_overlay_dismiss)
+            setImageResource(R.drawable.ic_close)
             setColorFilter(palette.onSurface)
             val pad = dp(4)
             setPadding(pad, pad, pad, pad)

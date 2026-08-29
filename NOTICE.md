@@ -70,9 +70,11 @@ Interface icons converted to `VectorDrawable`.
 - **License:** Apache License 2.0
 - **URL:** https://pictogrammers.com/library/mdi/
 - **License text:** https://www.apache.org/licenses/LICENSE-2.0
-- **Notes:** 21 icons converted from Iconify SVG via `tools/svg2vd.py`
-  (see `tools/icons.txt`). Apache 2.0 does not require attribution, but
-  credit is given on the in-app About page as good practice.
+- **Notes:** 33 icons covering the settings screens, main / overlay
+  menus and the input bars, converted from Iconify SVG via
+  `tools/svg2vd.py` (see `tools/icons.txt`). Apache 2.0 does not require
+  attribution, but credit is given on the in-app About page as good
+  practice.
 
 ---
 

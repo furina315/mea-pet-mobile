@@ -19,9 +19,10 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.TextView
+import com.meapet.mobile.R
 import kotlin.math.roundToInt
 
 /**
@@ -125,9 +126,9 @@ class OverlayInputWindow(
             indeterminateTintList = ColorStateList.valueOf(palette.primary)
         }
 
-        // 圆形主色发送按钮
+        // 圆形主色发送按钮（MDI send 图标）
         sendButton = ImageButton(ctx).apply {
-            setImageResource(android.R.drawable.ic_menu_send)
+            setImageResource(R.drawable.ic_send)
             setColorFilter(palette.onPrimary)
             background = oval(palette.primary)
             contentDescription = "发送"
@@ -146,11 +147,11 @@ class OverlayInputWindow(
             )
         }
 
-        val closeButton = TextView(ctx).apply {
-            text = "✕"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setTextColor(palette.onSurfaceVariant)
-            gravity = Gravity.CENTER
+        // 关闭按钮（MDI close 图标）
+        val closeButton = ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_close)
+            setColorFilter(palette.onSurfaceVariant)
+            contentDescription = "关闭"
             isClickable = true
             val outValue = TypedValue()
             ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, outValue, true)
@@ -158,12 +159,12 @@ class OverlayInputWindow(
             setOnClickListener { onClose() }
         }
 
-        // 左侧拖动抓手
-        val grip = TextView(ctx).apply {
-            text = "≡"
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setTextColor(palette.onSurfaceVariant.withAlpha(0xA6))
-            gravity = Gravity.CENTER
+        // 左侧拖动抓手（MDI drag-vertical 图标）
+        val grip = ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_drag)
+            setColorFilter(palette.onSurfaceVariant.withAlpha(0xA6))
+            contentDescription = "拖动"
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
             setOnTouchListener { _, event -> handleDrag(event) }
         }
 

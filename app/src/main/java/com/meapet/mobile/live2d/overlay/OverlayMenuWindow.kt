@@ -126,7 +126,7 @@ class OverlayMenuWindow(
                 resetAutoHide()
                 false
             }
-            addView(menuItemRow(R.drawable.ic_overlay_close, CLOSE_OVERLAY_LABEL) {
+            addView(menuItemRow(R.drawable.ic_close, CLOSE_OVERLAY_LABEL) {
                 hide()
                 onCloseOverlay()
             })
@@ -147,7 +147,7 @@ class OverlayMenuWindow(
             lockLabelView = lockRow.getChildAt(1) as TextView
             addView(lockRow)
             // 透明度：关掉菜单，打开独立的透明度调节面板（滑杆实时调人物透明度）
-            addView(menuItemRow(R.drawable.ic_overlay_alpha, ALPHA_LABEL) {
+            addView(menuItemRow(R.drawable.ic_settings_opacity, ALPHA_LABEL) {
                 hide()
                 onOpenAlpha()
             })

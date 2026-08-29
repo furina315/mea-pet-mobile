@@ -9,14 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeOff
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Lightbulb
-import androidx.compose.material.icons.outlined.PictureInPictureAlt
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -36,12 +28,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import com.meapet.mobile.R
 import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.tts.TtsManager
 
@@ -104,7 +97,7 @@ fun OverlayMenu(
         ) {
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(
-                    imageVector = Icons.Default.MoreVert,
+                    painter = painterResource(R.drawable.ic_menu_more),
                     contentDescription = "更多选项",
                     tint = Color.White
                 )
@@ -133,13 +126,13 @@ fun OverlayMenu(
                         shadowElevation = 8.dp
                     ) {
                         Column {
-                            MenuEntry("设置", Icons.Default.Settings) { menuExpanded = false; onSettings() }
+                            MenuEntry("设置", R.drawable.ic_menu_settings) { menuExpanded = false; onSettings() }
                             HorizontalDivider()
-                            MenuEntry("清除对话", Icons.Default.Delete) { menuExpanded = false; showClearConfirm = true }
+                            MenuEntry("清除对话", R.drawable.ic_menu_clear) { menuExpanded = false; showClearConfirm = true }
                             HorizontalDivider()
-                            MenuEntry("查看记忆", Icons.Outlined.Lightbulb) { menuExpanded = false; onShowMemories() }
+                            MenuEntry("查看记忆", R.drawable.ic_menu_memory) { menuExpanded = false; onShowMemories() }
                             HorizontalDivider()
-                            MenuEntry("悬浮窗", Icons.Outlined.PictureInPictureAlt) { menuExpanded = false; onToggleOverlay() }
+                            MenuEntry("悬浮窗", R.drawable.ic_menu_overlay) { menuExpanded = false; onToggleOverlay() }
                         }
                     }
                 }
@@ -166,15 +159,15 @@ fun OverlayMenu(
     }
 }
 
-/** 菜单项：文本 + 矢量图标。 */
+/** 菜单项：文本 + 矢量图标（MDI，见 tools/icons.txt）。 */
 @Composable
-private fun MenuEntry(label: String, icon: ImageVector, onClick: () -> Unit) {
+private fun MenuEntry(label: String, iconRes: Int, onClick: () -> Unit) {
     DropdownMenuItem(
         text = { Text(label, style = MaterialTheme.typography.bodyMedium) },
         onClick = onClick,
         leadingIcon = {
             Icon(
-                imageVector = icon,
+                painter = painterResource(iconRes),
                 contentDescription = null,
                 modifier = Modifier.padding(0.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -195,8 +188,8 @@ private fun SpeakerButton(ttsManager: TtsManager) {
         muted -> Color.White.copy(alpha = 0.4f)
         else -> Color.White
     }
-    val icon = if (muted && !isPlaying) Icons.AutoMirrored.Filled.VolumeOff
-               else Icons.AutoMirrored.Filled.VolumeUp
+    val icon = if (muted && !isPlaying) R.drawable.ic_tts_volume_off
+               else R.drawable.ic_tts_volume_on
 
     Box(
         modifier = Modifier
@@ -209,7 +202,7 @@ private fun SpeakerButton(ttsManager: TtsManager) {
     ) {
         IconButton(onClick = { ttsManager.toggleSessionMute() }) {
             Icon(
-                imageVector = icon,
+                painter = painterResource(icon),
                 contentDescription = if (muted) "开启本次语音" else "关闭本次语音",
                 tint = tint
             )

@@ -19,7 +19,7 @@ mdi/information-outline         ic_settings_about
 mdi/key-outline                 ic_settings_api
 mdi/tune-variant                ic_settings_params
 mdi/text-box-outline            ic_settings_prompt
-mdi/brain                       ic_settings_memory
+mdi/bookmark-outline            ic_settings_memory
 mdi/image-outline               ic_settings_wallpaper
 mdi/theme-light-dark            ic_settings_theme
 mdi/opacity                     ic_settings_opacity
@@ -36,3 +36,24 @@ mdi/chevron-right               ic_chevron_right         mirror
 mdi/alert-circle-outline        ic_error
 mdi/close                       ic_close
 mdi/refresh                     ic_refresh
+
+# ── 主页顶部菜单（OverlayMenu）──
+mdi/dots-vertical               ic_menu_more
+mdi/cog-outline                 ic_menu_settings
+mdi/trash-can-outline           ic_menu_clear
+mdi/bookmark-outline            ic_menu_memory
+mdi/picture-in-picture-top-right-outline  ic_menu_overlay
+
+# ── TTS 喇叭快捷钮（主界面）──
+mdi/volume-high                 ic_tts_volume_on
+mdi/volume-off                  ic_tts_volume_off
+
+# ── 悬浮窗菜单（OverlayMenuWindow）──
+# 关闭/透明度复用通用图标；输入/锁定为悬浮窗独有
+mdi/message-text-outline        ic_overlay_input
+mdi/lock-outline                ic_overlay_lock
+mdi/lock-open-variant-outline   ic_overlay_unlock
+
+# ── 悬浮窗输入框（OverlayInputWindow）──
+mdi/send                        ic_send
+mdi/drag-vertical               ic_drag
