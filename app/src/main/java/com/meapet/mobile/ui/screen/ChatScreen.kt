@@ -2,15 +2,11 @@ package com.meapet.mobile.ui.screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,8 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -43,7 +37,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.delay
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,26 +57,23 @@ import com.meapet.mobile.app.MeaPetApplication
 import com.meapet.mobile.viewmodel.ChatEvent
 import com.meapet.mobile.chat.ChatUiState
 import com.meapet.mobile.chat.MemoryDialogUi
-import com.meapet.mobile.core.AppInfo
 import com.meapet.mobile.memory.MemoryType
 import com.meapet.mobile.settings.SettingsKeys
 import com.meapet.mobile.ui.component.ChatBubble
 import com.meapet.mobile.ui.component.ChatInputBar
-import com.meapet.mobile.ui.component.LinkItem
+import com.meapet.mobile.ui.component.ErrorBubble
 import com.meapet.mobile.ui.component.OverlayMenu
+import com.meapet.mobile.ui.screen.settings.SettingsScreen
 import com.meapet.mobile.viewmodel.ChatViewModel
-import kotlin.time.Duration.Companion.milliseconds
 
 /** 内部页面导航。 */
-private enum class Page { CHAT, SETTINGS, PRIVACY }
-
-/** 关于卡片中的 Live2D 模型来源链接。 */
-private const val LIVE2D_MODEL_SOURCE_URL = "https://www.bilibili.com/video/BV1AoX7BXEaN"
+private enum class Page { CHAT, SETTINGS }
 
 /**
  * 聊天界面入口。
  *
- * 内部管理 CHAT / SETTINGS / PRIVACY 页面切换，带滑动过渡动画。
+ * 内部管理 CHAT / SETTINGS 页面切换，带滑动过渡动画。设置页内部的二级子页
+ * （含隐私政策全文）由 SettingsScreen 自己持有。
  */
 @Composable
 fun ChatScreenContent(
@@ -106,15 +96,13 @@ fun ChatScreenContent(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // 在设置页/隐私页时拦截系统返回键 → 回到上一级
+    // 在设置页时拦截系统返回键 → 回到聊天页。
+    // 设置页内部的子页返回由 SettingsScreen 自己的 BackHandler 处理（内层优先）。
     BackHandler(enabled = currentPage == Page.SETTINGS) {
         currentPage = Page.CHAT
     }
-    BackHandler(enabled = currentPage == Page.PRIVACY) {
-        currentPage = Page.SETTINGS
-    }
 
-    // 切换页面时同步触摸分区开关（设置页/隐私页内禁止穿透）——经 ViewModel 访问领域单例
+    // 切换页面时同步触摸分区开关（设置页内禁止穿透）——经 ViewModel 访问领域单例
     LaunchedEffect(currentPage) {
         chatViewModel.updateZoneTouchEnabled(currentPage == Page.CHAT)
     }
@@ -138,16 +126,11 @@ fun ChatScreenContent(
         when (page) {
             Page.SETTINGS -> SettingsScreen(
                 onBack = { currentPage = Page.CHAT },
-                onOpenPrivacyPolicy = { currentPage = Page.PRIVACY },
                 onExitApp = {
                     // 取消数据采集授权后需立即终止进程：友盟 SDK 有独立上报线程，
                     // 仅 finish 页面无法保证其立即停止，kill 是隐私合规的兜底
                     exitAppSilently()
                 }
-            )
-
-            Page.PRIVACY -> PrivacyPolicyScreen(
-                onBack = { currentPage = Page.SETTINGS }
             )
 
             Page.CHAT -> ChatPage(
@@ -171,8 +154,6 @@ private fun ChatPage(
     val state by chatViewModel.state.collectAsState()
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
-    var showAbout by remember { mutableStateOf(false) }
-    var showDialog by remember { mutableStateOf(false) }
 
     // 主页聊天气泡透明度：订阅设置流（默认 1.0 不透明），实时反映设置页的滑杆
     val context = LocalContext.current
@@ -183,41 +164,12 @@ private fun ChatPage(
     val bubbleAlphaState = bubbleAlphaFlow.collectAsState(initial = SettingsKeys.Defaults.CHAT_BUBBLE_ALPHA)
     val bubbleAlpha = bubbleAlphaState.value.toFloat()
 
-    // 延迟移除 Dialog，为退出动画留出时间
-    LaunchedEffect(showAbout) {
-        if (showAbout) {
-            showDialog = true
-        } else if (showDialog) {
-            delay(250.milliseconds)
-            showDialog = false
-        }
-    }
-
-    // BackHandler：关于浮层优先拦截
-    BackHandler(enabled = showAbout) {
-        showAbout = false
-    }
-
-    // 错误提示：可点「重试」重发上一条消息
-    LaunchedEffect(state.error) {
-        state.error?.let { message ->
-            val result = snackbarHostState.showSnackbar(
-                message = message,
-                actionLabel = "重试",
-                duration = SnackbarDuration.Long,
-                withDismissAction = true
-            )
-            if (result == SnackbarResult.ActionPerformed) {
-                chatViewModel.onEvent(ChatEvent.RetryLastMessage)
-            }
-            chatViewModel.onEvent(ChatEvent.DismissError)
-        }
-    }
-
-    // 新消息时自动滚动到底部
-    LaunchedEffect(state.messages.size) {
-        if (state.messages.isNotEmpty()) {
-            listState.animateScrollToItem(state.messages.size - 1)
+    // 新消息或错误卡片出现时自动滚动到底部。
+    // 错误卡片是列表末尾的额外 item，所以它出现时也要滚一次，否则用户看不到重试按钮。
+    LaunchedEffect(state.messages.size, state.error) {
+        val lastIndex = state.messages.size - 1 + if (state.error != null) 1 else 0
+        if (lastIndex >= 0) {
+            listState.animateScrollToItem(lastIndex)
         }
     }
 
@@ -255,7 +207,9 @@ private fun ChatPage(
         MessageList(
             state = state,
             listState = listState,
-            bubbleAlpha = bubbleAlpha
+            bubbleAlpha = bubbleAlpha,
+            onDismissError = { chatViewModel.onEvent(ChatEvent.DismissError) },
+            onRetry = { chatViewModel.onEvent(ChatEvent.RetryLastMessage) }
         )
 
         // ── Layer 2: 顶部菜单 ──
@@ -268,7 +222,6 @@ private fun ChatPage(
                 chatViewModel.onEvent(ChatEvent.ShowMemories)
             },
             onSettings = onOpenSettings,
-            onAbout = { showAbout = true },
             modifier = Modifier.align(Alignment.TopEnd)
         )
 
@@ -297,22 +250,7 @@ private fun ChatPage(
             )
         }
 
-        // ── Layer 5: 关于卡片 ──
-        if (showDialog) {
-            AboutDialog(
-                visible = showAbout,
-                onDismiss = { showAbout = false },
-                isCheckingUpdate = state.isCheckingUpdate,
-                updateMessage = state.aboutUpdateMessage,
-                releaseUrl = state.aboutReleaseUrl,
-                onCheckUpdate = { chatViewModel.onEvent(ChatEvent.CheckForUpdate) },
-                onDismissUpdateMessage = {
-                    chatViewModel.onEvent(ChatEvent.DismissAboutUpdateMessage)
-                }
-            )
-        }
-
-        // ── Layer 6: 记忆查看对话框 ──
+        // ── Layer 5: 记忆查看对话框 ──
         state.memoryDialog?.let { dialog ->
             MemoryDialog(
                 dialog = dialog,
@@ -329,7 +267,9 @@ private fun ChatPage(
 private fun MessageList(
     state: ChatUiState,
     listState: LazyListState,
-    bubbleAlpha: Float
+    bubbleAlpha: Float,
+    onDismissError: () -> Unit,
+    onRetry: () -> Unit
 ) {
     LazyColumn(
         state = listState,
@@ -378,171 +318,22 @@ private fun MessageList(
                 }
             }
         }
-    }
-}
 
-/**
- * 关于悬浮卡片——使用系统 Dialog 窗口，真正浮于所有内容之上。
- *
- * @param visible 控制动画：true=入场，false=退场
- * @param onDismiss 关闭回调（退场动画由外部 [showDialog] 延迟移除保证完整播放）
- * @param isCheckingUpdate 是否正在检测更新
- * @param updateMessage 手动检测结果文案
- * @param releaseUrl 有新版本时的发布页 URL
- * @param onCheckUpdate 点击「检查更新」
- * @param onDismissUpdateMessage 关闭检测结果文案
- */
-@Composable
-private fun AboutDialog(
-    visible: Boolean,
-    onDismiss: () -> Unit,
-    isCheckingUpdate: Boolean = false,
-    updateMessage: String? = null,
-    releaseUrl: String? = null,
-    onCheckUpdate: () -> Unit = {},
-    onDismissUpdateMessage: () -> Unit = {}
-) {
-    val animProgress = remember { Animatable(0f) }
-
-    LaunchedEffect(visible) {
-        if (visible) {
-            animProgress.animateTo(1f, animationSpec = tween(200))
-        } else {
-            animProgress.animateTo(0f, animationSpec = tween(200))
-        }
-    }
-
-    // 关闭对话框时清掉手动检测文案，避免下次打开残留
-    LaunchedEffect(visible) {
-        if (!visible) onDismissUpdateMessage()
-    }
-
-    Dialog(
-        onDismissRequest = {
-            if (visible) onDismiss()
-        },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        val context = LocalContext.current
-        val appVersion = AppInfo.readVersion(context)
-        val uriHandler = LocalUriHandler.current
-
-        Card(
-            modifier = Modifier
-                .padding(horizontal = 32.dp)
-                .widthIn(max = 400.dp)
-                .fillMaxWidth()
-                .graphicsLayer {
-                    alpha = animProgress.value
-                    scaleX = 0.85f + 0.15f * animProgress.value
-                    scaleY = 0.85f + 0.15f * animProgress.value
-                    transformOrigin = TransformOrigin(0.5f, 0.5f)
-                },
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Text("MeaPet —— 梅尔桌宠", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "一只基于 Live2D 的 AI 梅尔 非常不完善 但是初版花了我 0.14B Tokens",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+        // 错误卡片跟在最后一条消息之后，随对话一起滚动。
+        // 只从 state.error 渲染，不进 messages，因此不会被写入会话历史。
+        state.error?.let { message ->
+            item(key = "error-bubble") {
+                ErrorBubble(
+                    message = message,
+                    onDismiss = onDismissError,
+                    onRetry = onRetry,
+                    alpha = bubbleAlpha
                 )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    "版本 $appVersion",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(Modifier.height(10.dp))
-                HorizontalDivider()
-                Spacer(Modifier.height(10.dp))
-
-                Text(
-                    "借助 Claude Code CLI，由 DeepSeek V4 Flash 强力赋能辅助开发",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(2.dp))
-
-                val linkStyle = MaterialTheme.typography.bodySmall
-                LinkItem(
-                    text = "Live2D 模型来源",
-                    url = LIVE2D_MODEL_SOURCE_URL,
-                    uriHandler = uriHandler,
-                    style = linkStyle
-                )
-                Spacer(Modifier.height(2.dp))
-                LinkItem(
-                    text = "GitHub 仓库",
-                    url = com.meapet.mobile.core.AppInfo.gitRepoUrl,
-                    uriHandler = uriHandler,
-                    style = linkStyle
-                )
-                Spacer(Modifier.height(2.dp))
-                LinkItem(
-                    text = "交流 QQ 群",
-                    url = com.meapet.mobile.core.AppInfo.qqGroupUrl,
-                    uriHandler = uriHandler,
-                    style = linkStyle
-                )
-
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "技术栈：Live2D Cubism · Jetpack Compose · Ktor · Coroutines",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                )
-
-                if (updateMessage != null) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = updateMessage,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    if (releaseUrl != null) {
-                        Spacer(Modifier.height(2.dp))
-                        LinkItem(
-                            text = "打开更新页面",
-                            url = releaseUrl,
-                            uriHandler = uriHandler,
-                            style = linkStyle
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = onCheckUpdate,
-                        enabled = !isCheckingUpdate
-                    ) {
-                        Text(if (isCheckingUpdate) "检测中…" else "检查更新")
-                    }
-                    TextButton(
-                        onClick = {
-                            if (visible) onDismiss()
-                        }
-                    ) {
-                        Text("关闭")
-                    }
-                }
             }
         }
     }
 }
+
 
 /**
  * 记忆查看对话框：统计 + 条目列表 + 单条删除 + 清除全部（带确认）。

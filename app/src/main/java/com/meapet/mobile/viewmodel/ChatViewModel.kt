@@ -51,8 +51,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     /** 在途发送任务；清空会话时取消，避免回复回写到已清空的会话。 */
     private var sendJob: Job? = null
 
-    /** 关于页手动检测任务。 */
-    private var checkUpdateJob: Job? = null
 
     init {
         // 初始化时从 ConversationManager 加载已有消息
@@ -216,8 +214,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             is ChatEvent.DismissError -> dismissError()
             is ChatEvent.DismissMemoryInfo -> dismissMemoryInfo()
             is ChatEvent.DismissUpdateNotice -> dismissUpdateNotice()
-            is ChatEvent.CheckForUpdate -> checkForUpdate()
-            is ChatEvent.DismissAboutUpdateMessage -> dismissAboutUpdateMessage()
         }
     }
 
@@ -387,10 +383,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(updateNotice = null) }
     }
 
-    private fun dismissAboutUpdateMessage() {
-        _state.update { it.copy(aboutUpdateMessage = null, aboutReleaseUrl = null) }
-    }
-
     /**
      * 调度系统气泡的延时移除，返回对应的 Job。
      * @param lifeMap 更新此 map 中的条目
@@ -418,47 +410,4 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** 关于页手动检测：始终反馈结果（有更新 / 已是最新 / 失败）。 */
-    private fun checkForUpdate() {
-        if (_state.value.isCheckingUpdate) return
-        checkUpdateJob?.cancel()
-        _state.update {
-            it.copy(
-                isCheckingUpdate = true,
-                aboutUpdateMessage = null,
-                aboutReleaseUrl = null
-            )
-        }
-        checkUpdateJob = viewModelScope.launch {
-            when (val result = updateChecker.check()) {
-                is UpdateCheckResult.UpdateAvailable -> {
-                    _state.update {
-                        it.copy(
-                            isCheckingUpdate = false,
-                            aboutUpdateMessage = "发现新版本 v${result.release.versionName}",
-                            aboutReleaseUrl = result.release.htmlUrl
-                        )
-                    }
-                }
-                is UpdateCheckResult.UpToDate -> {
-                    _state.update {
-                        it.copy(
-                            isCheckingUpdate = false,
-                            aboutUpdateMessage = "当前已是最新版本（v${result.currentVersion}）",
-                            aboutReleaseUrl = null
-                        )
-                    }
-                }
-                is UpdateCheckResult.Failed -> {
-                    _state.update {
-                        it.copy(
-                            isCheckingUpdate = false,
-                            aboutUpdateMessage = result.message,
-                            aboutReleaseUrl = null
-                        )
-                    }
-                }
-            }
-        }
-    }
 }

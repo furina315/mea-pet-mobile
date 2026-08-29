@@ -15,7 +15,7 @@ import com.meapet.mobile.core.AppInfo
 /**
  * 共享的隐私政策正文内容（纯内容，不含任何外壳组件）。
  *
- * 供 [PrivacyDialog] 和 [com.meapet.mobile.ui.screen.PrivacyPolicyScreen] 复用，
+ * 供 [PrivacyDialog] 和设置页的隐私政策子页复用，
  * 确保两处文案一致且由同一模块维护。
  */
 @Composable
