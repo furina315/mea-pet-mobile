@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] - 2026-08-29
+
+### Added
+
+- **助手消息 Markdown 渲染** — 接入 Markwon 4.6.2（core / ext-latex / ext-strikethrough / ext-tables / linkify / inline-parser），助手气泡支持代码块、表格、删除线、自动链接；用户气泡与系统提示保持纯文本。
+- **LaTeX 公式渲染** — 基于 jlatexmath，注册 `MarkwonInlineParserPlugin` 并开启行内公式；将 `\[...\]`、`\(...\)`、含数学符号的 `$...$` 统一归一化为 `$$...$$`，首次渲染前显式 init 并预热符号表。
+- **聊天气泡文字选择复制** — 用户气泡用 `SelectionContainer`、助手气泡 `TextView setTextIsSelectable(true)` 并保留 `LinkMovementMethod`；长按弹出系统复制 / 全选菜单，选择与链接点击并存。不改动根布局触摸透传，Live2D 点击互动不受影响。
+- **流式输出自动补全未闭合代码围栏** — 流式渲染时临时补齐代码块围栏，避免半截代码块渲染错乱。
+
+### Notes
+
+- 本版本功能来自社区贡献者 [@furina315](https://github.com/furina315)（PR #11）。
+- 相对 1.6.0 无破坏性变更，applicationId 不变，可覆盖安装。
+- 新增渲染依赖 Markwon 4.6.2（core / ext-latex / ext-strikethrough / ext-tables / linkify / inline-parser）。
+
+---
+
 ## [1.6.0] - 2026-08-25
 
 ### 大版本总体介绍（自 1.5.0）
@@ -44,7 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **悬浮窗透明度调节在 Android 10+ 部分机型上无效** — 根因见上「Changed」；现已改为 GL 内乘 alpha，所有机型统一生效。
-- **壁纸图片上下颠倒** — `GLUtils.texImage2D` 上传的 Bitmap 纹理方向（顶部 v=0）与离屏 FBO 相反，复用后上下颠倒；改用正确的 UV 映射后照片正立。
 
 ### Notes
 

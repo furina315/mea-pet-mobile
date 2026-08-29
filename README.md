@@ -9,7 +9,7 @@ Android 上的 Live2D AI 桌宠：在主页与系统悬浮窗里渲染 Live2D �
 ## 功能
 
 - **Live2D 模型** — Cubism SDK 渲染，支持触摸交互、视角跟随与分区语音反馈
-- **AI 聊天** — OpenAI 兼容 API（可自建中转），多轮对话、System Prompt、记忆上下文注入；聊天记录本地持久化，重启不丢
+- **AI 聊天** — OpenAI 兼容 API（可自建中转），多轮对话、System Prompt、记忆上下文注入；助手回复支持 Markdown / LaTeX 渲染，气泡文字可长按选择复制；聊天记录本地持久化，重启不丢
 - **本地记忆** — 由大模型在对话中自主判断该记什么（事实 / 特质 / 短期），并按设定轮次自动摘要为长期记忆；事实与特质永久保留，可在首页菜单「查看记忆」中查看与删除
 - **本地语音合成（TTS）** — 梅尔音色端侧离线朗读，完全不走云端；模型按需下载或从本地 zip 资源包导入，主界面 / 悬浮窗可独立开关，支持语速调节与喇叭快捷静音
 - **背景壁纸** — 主界面聊天背景支持相册选图与模糊调节（仅主界面生效，悬浮窗保持透明）
@@ -37,7 +37,7 @@ Android 上的 Live2D AI 桌宠：在主页与系统悬浮窗里渲染 Live2D �
 从 [Releases](https://github.com/llz121517/mea-pet-mobile/releases) 页面下载最新的 APK 直接安装，无需自行编译。
 
 ```bash
-adb install MeaPet-v1.6.0.APK
+adb install MeaPet-v1.7.0.APK
 ```
 
 #### 方式二：手动编译
@@ -165,7 +165,7 @@ libonnxruntime-<abi>.so            # 各 ABI 的 ONNX Runtime 原生库
 ## 技术栈
 
 ```
-Live2D Cubism  ·  Jetpack Compose  ·  Ktor  ·  Coroutines  ·  GLSurfaceView
+Live2D Cubism  ·  Jetpack Compose  ·  Ktor  ·  Markwon  ·  Coroutines  ·  GLSurfaceView
 ```
 
 ## Live2D 模型来源
@@ -175,6 +175,10 @@ Live2D Cubism  ·  Jetpack Compose  ·  Ktor  ·  Coroutines  ·  GLSurfaceView
 - [Live2D模型分享 - 梅娅 / Bilibili](https://www.bilibili.com/video/BV1AoX7BXEaN)
 
 使用该模型时请遵循原作者的发布说明与授权要求。模型版权归原作者所有，与本仓库 MIT 许可证无关。
+
+## 贡献
+
+感谢所有为 MeaPet 做出贡献的开发者，名单见 [CONTRIBUTORS.md](CONTRIBUTORS.md)。欢迎通过 [Issues](https://github.com/llz121517/mea-pet-mobile/issues) 或 [Pull Request](https://github.com/llz121517/mea-pet-mobile/pulls) 参与贡献。
 
 ## 许可证
 
