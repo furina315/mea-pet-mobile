@@ -11,13 +11,10 @@ import com.meapet.mobile.memory.MemoryStats
  *
  * @property messages 消息列表
  * @property isLoading 是否正在等待 AI 响应
- * @property error 错误信息（非 null 时显示错误提示）
+ * @property error 错误信息（非 null 时在对话流末尾显示错误卡片）
  * @property memoryContextInfo 当前记忆上下文摘要（如 "已加载 3 条记忆"）
  * @property inputText 输入框当前文本
  * @property updateNotice 启动静默检测发现的新版本提示（Snackbar 用）
- * @property aboutUpdateMessage 关于页手动检测结果文案
- * @property aboutReleaseUrl 关于页检测有新版本时的发布页 URL
- * @property isCheckingUpdate 关于页是否正在检测更新
  * @property memoryDialog 记忆查看对话框数据（null = 不显示）
  */
 data class ChatUiState(
@@ -27,9 +24,6 @@ data class ChatUiState(
     val memoryContextInfo: String? = null,
     val inputText: String = "",
     val updateNotice: UpdateNoticeUi? = null,
-    val aboutUpdateMessage: String? = null,
-    val aboutReleaseUrl: String? = null,
-    val isCheckingUpdate: Boolean = false,
     val memoryDialog: MemoryDialogUi? = null
 )
 

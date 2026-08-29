@@ -13,7 +13,10 @@ import com.meapet.mobile.settings.SettingsKeys
 import com.meapet.mobile.settings.SettingsManager
 import com.meapet.mobile.tts.model.TtsModelManager
 import com.meapet.mobile.tts.model.TtsModelState
+import com.meapet.mobile.update.UpdateCheckResult
+import com.meapet.mobile.update.UpdateChecker
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,6 +67,9 @@ data class SettingsUiState(
     val chatBubbleAlpha: Double = SettingsKeys.Defaults.CHAT_BUBBLE_ALPHA,
     // ── 更新 ──
     val enableAutoUpdateCheck: Boolean = SettingsKeys.Defaults.ENABLE_AUTO_UPDATE_CHECK,
+    val isCheckingUpdate: Boolean = false,
+    val updateMessage: String? = null,
+    val updateReleaseUrl: String? = null,
     // ── 背景壁纸 ──
     /** 主界面背景壁纸文件绝对路径（空串 = 默认纯色）。 */
     val wallpaperPath: String = SettingsKeys.Defaults.WALLPAPER_PATH,
@@ -76,6 +82,10 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
     private val container = MeaPetApplication.from(application)
     private val settingsManager: SettingsManager = container.settingsManager
     private val ttsModelManager: TtsModelManager = container.ttsModelManager
+    private val updateChecker: UpdateChecker = container.updateChecker
+
+    /** 手动检测更新的在途任务，重复点击时取消上一次。 */
+    private var checkUpdateJob: Job? = null
 
     private val _state = MutableStateFlow(initialState())
     val state: StateFlow<SettingsUiState> = _state.asStateFlow()
@@ -275,6 +285,38 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
     /** 切换启动自动检查更新（默认开启）。 */
     fun updateEnableAutoUpdateCheck(enabled: Boolean) {
         viewModelScope.launch { settingsManager.setEnableAutoUpdateCheck(enabled) }
+    }
+
+    /**
+     * 关于页手动检测更新：始终反馈结果（有更新 / 已是最新 / 失败）。
+     *
+     * 与 ChatViewModel 的「启动静默检测」不同：后者只在有新版本时弹 Snackbar、
+     * 失败不打扰；这里是用户主动点击，任何结果都要给回执。
+     */
+    fun checkForUpdate() {
+        if (_state.value.isCheckingUpdate) return
+        checkUpdateJob?.cancel()
+        _state.update {
+            it.copy(isCheckingUpdate = true, updateMessage = null, updateReleaseUrl = null)
+        }
+        checkUpdateJob = viewModelScope.launch {
+            val (message, url) = when (val result = updateChecker.check()) {
+                is UpdateCheckResult.UpdateAvailable ->
+                    "发现新版本 v${result.release.versionName}" to result.release.htmlUrl
+                is UpdateCheckResult.UpToDate ->
+                    "当前已是最新版本（v${result.currentVersion}）" to null
+                is UpdateCheckResult.Failed ->
+                    result.message to null
+            }
+            _state.update {
+                it.copy(isCheckingUpdate = false, updateMessage = message, updateReleaseUrl = url)
+            }
+        }
+    }
+
+    /** 清掉手动检测结果文案（离开关于页时调用，避免下次进入残留）。 */
+    fun dismissUpdateMessage() {
+        _state.update { it.copy(updateMessage = null, updateReleaseUrl = null) }
     }
 
     // ── 背景壁纸 ──────────────────────────────────────

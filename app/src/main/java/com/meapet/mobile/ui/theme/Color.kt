@@ -36,6 +36,10 @@ private fun Color.hueShift(): Color = Color(green, blue, red)
 /**
  * 从单一 seed 主色生成完整浅色方案（模拟动态颜色行为）。
  * 不需要手动为每套预设配副色/容器色。
+ *
+ * primary/secondary/tertiary 先压暗 0.35 再配近白前景，而非直接用 seed 原色：
+ * MD3 浅色方案的 primary 相当于 tone-40（偏暗），原色配深字亮度过近。0.35 是让
+ * 12 套预设全部达到 WCAG 4.5:1 的安全下界，改动前请跑 tools/contrast_check.py。
  */
 private fun lightScheme(seed: Color, bg: Color = Color(0xFFF8F8F8)): ColorScheme {
     val s = seed.desaturate(0.35f)
@@ -47,11 +51,11 @@ private fun lightScheme(seed: Color, bg: Color = Color(0xFFF8F8F8)): ColorScheme
         (bg.blue * 0.85f + seed.blue * 0.15f).coerceIn(0f, 1f),
     )
     return lightColorScheme(
-        primary = seed, onPrimary = seed.darken(0.6f),
+        primary = seed.darken(0.35f), onPrimary = seed.lighten(0.95f),
         primaryContainer = seed.lighten(0.82f), onPrimaryContainer = seed.darken(0.6f),
-        secondary = s, onSecondary = s.darken(0.6f),
+        secondary = s.darken(0.35f), onSecondary = s.lighten(0.95f),
         secondaryContainer = s.lighten(0.82f), onSecondaryContainer = s.darken(0.6f),
-        tertiary = t, onTertiary = t.darken(0.6f),
+        tertiary = t.darken(0.35f), onTertiary = t.lighten(0.95f),
         tertiaryContainer = t.lighten(0.82f), onTertiaryContainer = t.darken(0.6f),
         background = tintedBg, onBackground = seed.darken(0.5f),
         surface = tintedBg, onSurface = seed.darken(0.5f),

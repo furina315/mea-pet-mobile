@@ -36,10 +36,4 @@ sealed interface ChatEvent {
 
     /** 启动静默检测更新提示已展示。 */
     data object DismissUpdateNotice : ChatEvent
-
-    /** 关于页手动检测更新。 */
-    data object CheckForUpdate : ChatEvent
-
-    /** 关于页检测结果提示已展示/清除。 */
-    data object DismissAboutUpdateMessage : ChatEvent
 }

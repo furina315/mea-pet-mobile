@@ -1,0 +1,38 @@
+﻿# 设置界面图标清单
+#
+# 图标源：Material Design Icons (MDI) by Pictogrammers —— Apache License 2.0
+#   https://pictogrammers.com/library/mdi/
+# 经 Iconify API 取回并转成 Android VectorDrawable：`python3 tools/svg2vd.py`
+#
+# 统一选 -outline 变体，保证线条粗细一致；颜色由 Compose 侧 Icon(tint=...) 控制。
+#
+# 格式： <iconify 名称>  <资源名>  [mirror]
+
+# ── 设置根页：五个一级入口 ──
+mdi/cloud-outline               ic_settings_provider
+mdi/chat-outline                ic_settings_chat
+mdi/palette-outline             ic_settings_appearance
+mdi/microphone-outline          ic_settings_voice
+mdi/information-outline         ic_settings_about
+
+# ── 子页内的分节图标 ──
+mdi/key-outline                 ic_settings_api
+mdi/tune-variant                ic_settings_params
+mdi/text-box-outline            ic_settings_prompt
+mdi/brain                       ic_settings_memory
+mdi/image-outline               ic_settings_wallpaper
+mdi/theme-light-dark            ic_settings_theme
+mdi/opacity                     ic_settings_opacity
+mdi/waveform                    ic_settings_tts_model
+mdi/update                      ic_settings_update
+mdi/shield-check-outline        ic_settings_privacy
+mdi/file-document-outline       ic_settings_policy
+mdi/exit-to-app                 ic_settings_exit         mirror
+
+# ── 通用 ──
+mdi/chevron-right               ic_chevron_right         mirror
+
+# ── 对话内错误卡片 ──
+mdi/alert-circle-outline        ic_error
+mdi/close                       ic_close
+mdi/refresh                     ic_refresh
