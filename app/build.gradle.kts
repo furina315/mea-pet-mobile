@@ -23,6 +23,12 @@ val qqGroupUrl: String = localProperties.getProperty("app.qqGroupUrl", "") ?: ""
 val umengPolicyUrl: String = localProperties.getProperty("app.umengPolicyUrl", "") ?: ""
 // TTS 模型下载地址（开源分叉时按需替换；缺省为空表示未配置，设置里下载入口将提示）
 val ttsModelBaseUrl: String = localProperties.getProperty("app.ttsModelBaseUrl", "") ?: ""
+// 隐私政策版本号与日期（开源分叉时按需替换）。
+// privacyVersion 为字符串（如 "1.1"），用户已看过/已同意的版本号记录在 DataStore，
+// 启动时若记录值不等于该值则重新弹窗。生效/更新日期用于隐私政策头部展示。
+val privacyVersion: String = localProperties.getProperty("app.privacyVersion", "1.1") ?: "1.1"
+val privacyEffectiveDate: String = localProperties.getProperty("app.privacyEffectiveDate", "2026-07-29") ?: "2026-07-29"
+val privacyUpdateDate: String = localProperties.getProperty("app.privacyUpdateDate", "2026-08-14") ?: "2026-08-14"
 
 android {
     namespace = "com.meapet.mobile"
@@ -36,8 +42,8 @@ android {
         applicationId = "com.meapet.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode =  10
-        versionName = "1.6.0"
+        versionCode =  11
+        versionName = "1.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -55,6 +61,10 @@ android {
         buildConfigField("String", "QQ_GROUP_URL", "\"$qqGroupUrl\"")
         buildConfigField("String", "UMENG_POLICY_URL", "\"$umengPolicyUrl\"")
         buildConfigField("String", "TTS_MODEL_BASE_URL", "\"$ttsModelBaseUrl\"")
+        // 隐私政策版本号（String）与生效/更新日期（展示用）
+        buildConfigField("String", "PRIVACY_VERSION", "\"$privacyVersion\"")
+        buildConfigField("String", "PRIVACY_EFFECTIVE_DATE", "\"$privacyEffectiveDate\"")
+        buildConfigField("String", "PRIVACY_UPDATE_DATE", "\"$privacyUpdateDate\"")
     }
 
     buildTypes {

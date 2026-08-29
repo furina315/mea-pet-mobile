@@ -9,12 +9,12 @@ Android 上的 Live2D AI 桌宠：在主页与系统悬浮窗里渲染 Live2D �
 ## 功能
 
 - **Live2D 模型** — Cubism SDK 渲染，支持触摸交互、视角跟随与分区语音反馈
-- **AI 聊天** — OpenAI 兼容 API（可自建中转），多轮对话、System Prompt、记忆上下文注入；聊天记录本地持久化，重启不丢
+- **AI 聊天** — OpenAI 兼容 API（可自建中转），多轮对话、System Prompt、记忆上下文注入；助手回复支持 Markdown / LaTeX 渲染，气泡文字可长按选择复制；聊天记录本地持久化，重启不丢
 - **本地记忆** — 由大模型在对话中自主判断该记什么（事实 / 特质 / 短期），并按设定轮次自动摘要为长期记忆；事实与特质永久保留，可在首页菜单「查看记忆」中查看与删除
 - **本地语音合成（TTS）** — 梅尔音色端侧离线朗读，完全不走云端；模型按需下载或从本地 zip 资源包导入，主界面 / 悬浮窗可独立开关，支持语速调节与喇叭快捷静音
 - **背景壁纸** — 主界面聊天背景支持相册选图与模糊调节（仅主界面生效，悬浮窗保持透明）
 - **聊天气泡透明度** — 主页气泡透明度可调（20%–100%）
-- **多主题配色** — Material You 动态取色 + 多套预设色板，支持浅色 / 深色 / 跟随系统
+- **多主题配色** — Material You 动态取色 + 多套预设色板，支持浅色 / 深色 / 跟随系统；浅色配色已通过 WCAG 对比度校验
 - **悬浮窗模式** — 前台 Service 浮窗常驻，拖拽 / 捏合缩放；双击唤起悬浮菜单（关闭悬浮窗 / 唤起输入 / 锁定 / 透明度），快速三击直接关闭；悬浮窗内可直接输入聊天，AI 回复以带尾巴的气泡显示在人物旁，配色跟随主题
 - **检测更新** — 启动静默检查 GitHub Releases；关于页可手动检测
 - **隐私合规** — 首次启动授权弹窗；可查看隐私政策、导出日志、取消数据采集授权
@@ -37,7 +37,7 @@ Android 上的 Live2D AI 桌宠：在主页与系统悬浮窗里渲染 Live2D �
 从 [Releases](https://github.com/llz121517/mea-pet-mobile/releases) 页面下载最新的 APK 直接安装，无需自行编译。
 
 ```bash
-adb install MeaPet-v1.6.0.APK
+adb install MeaPet-v1.7.0.APK
 ```
 
 #### 方式二：手动编译
@@ -78,9 +78,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ### 配置
 
-应用安装后，在设置页按分组配置。设置页按功能域分为 **对话 / 外观 / 语音 / 更新 / 隐私与数据** 五组。
+应用安装后，在设置页按分组配置。设置页采用二级导航：根页为「提供商 / 对话 / 外观 / 语音 / 关于」五个功能域入口（每项显示当前状态摘要，如模型名、主题、发声开关、版本号），点入对应子页进行详细设置；隐私政策全文在「关于」再往里一层。
 
-#### 对话
+#### 提供商
 
 **API 配置**：
 
@@ -96,6 +96,8 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 | **模型** | 使用的模型名称（如 `gpt-4o-mini`）；也可点「获取模型列表」从端点拉取后点选 |
 | **Temperature** | 生成温度 (0.0–2.0) |
 | **最大 Token** | 单次响应最大 Token 数 |
+
+#### 对话
 
 **System Prompt**：编辑人设提示词；「恢复默认」一键还原内置人设（二次确认）。
 
@@ -152,20 +154,18 @@ libonnxruntime-<abi>.so            # 各 ABI 的 ONNX Runtime 原生库
 
 导入规则：**ONNX 全量导入**；**原生库按当前设备 ABI 选择性导入**（只落盘匹配的那一份）。兼容打包时误嵌套子文件夹的情况（自动在子目录中查找，最多 2 层）。
 
-#### 更新
+#### 关于
 
-- **启动时自动检查更新** — 打开 App 时静默检测新版本，发现更新才提示；关闭后仅可在关于页手动检查。
+「关于」子页集中了应用信息、更新与隐私入口：
 
-#### 隐私与数据
-
-- **查看隐私政策** — 完整隐私协议全文。
-- **导出日志** — 一键分享应用日志（含设备 / 版本头信息、native 崩溃 tombstone、logcat），便于反馈问题。
-- **统计数据采集** — 友盟统计 SDK 授权管理：可查看授权状态，取消授权后立即退出（确保停止上报）。
+- **应用信息** — 版本号、技术栈等。
+- **更新** — 启动时静默检测新版本，发现更新才提示（可在子页关闭）；此处也可手动「检查更新」（按钮 + 进度 + 结果文案与发布页链接）。
+- **隐私与数据** — 查看隐私政策全文（再往里一层）；导出日志（含设备 / 版本头信息、native 崩溃 tombstone、logcat），便于反馈问题；友盟统计 SDK 授权管理（可查看授权状态，取消授权后立即退出，确保停止上报）。
 
 ## 技术栈
 
 ```
-Live2D Cubism  ·  Jetpack Compose  ·  Ktor  ·  Coroutines  ·  GLSurfaceView
+Live2D Cubism  ·  Jetpack Compose  ·  Ktor  ·  Markwon  ·  Coroutines  ·  GLSurfaceView
 ```
 
 ## Live2D 模型来源
@@ -175,6 +175,10 @@ Live2D Cubism  ·  Jetpack Compose  ·  Ktor  ·  Coroutines  ·  GLSurfaceView
 - [Live2D模型分享 - 梅娅 / Bilibili](https://www.bilibili.com/video/BV1AoX7BXEaN)
 
 使用该模型时请遵循原作者的发布说明与授权要求。模型版权归原作者所有，与本仓库 MIT 许可证无关。
+
+## 贡献
+
+感谢所有为 MeaPet 做出贡献的开发者，名单见 [CONTRIBUTORS.md](CONTRIBUTORS.md)。欢迎通过 [Issues](https://github.com/llz121517/mea-pet-mobile/issues) 或 [Pull Request](https://github.com/llz121517/mea-pet-mobile/pulls) 参与贡献。
 
 ## 许可证
 

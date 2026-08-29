@@ -77,6 +77,7 @@ class SettingsManager(context: Context) {
     private val KEY_ENABLE_AUTO_UPDATE_CHECK = booleanPreferencesKey(SettingsKeys.ENABLE_AUTO_UPDATE_CHECK)
     private val KEY_WALLPAPER_PATH = stringPreferencesKey(SettingsKeys.WALLPAPER_PATH)
     private val KEY_WALLPAPER_BLUR = doublePreferencesKey(SettingsKeys.WALLPAPER_BLUR)
+    private val KEY_PRIVACY_VERSION_SHOWN = stringPreferencesKey(SettingsKeys.PRIVACY_VERSION_SHOWN)
 
     // ── Flows (响应式订阅) ────────────────────────────
 
@@ -180,6 +181,11 @@ class SettingsManager(context: Context) {
         prefs[KEY_WALLPAPER_BLUR] ?: SettingsKeys.Defaults.WALLPAPER_BLUR
     }
 
+    /** 已看过/已处理的隐私政策版本号流（默认空串 = 未处理）。 */
+    val privacyVersionShownFlow: Flow<String> = dataStore.data.map { prefs ->
+        prefs[KEY_PRIVACY_VERSION_SHOWN] ?: SettingsKeys.Defaults.PRIVACY_VERSION_SHOWN
+    }
+
     // ── 同步 getter（非 Flow 场景使用，如 Client 构造）──
     // 读取内存快照，正常路径无磁盘 IO；快照未就绪时短暂 runBlocking 读一次兜底
 
@@ -229,6 +235,13 @@ class SettingsManager(context: Context) {
 
     /** 主界面背景壁纸模糊强度（0~1，0 = 不模糊）。 */
     fun getWallpaperBlur(): Double = currentPrefs()[KEY_WALLPAPER_BLUR] ?: SettingsKeys.Defaults.WALLPAPER_BLUR
+
+    /** 已看过/已处理的隐私政策版本号（默认空串 = 未处理）。 */
+    fun getPrivacyVersionShown(): String =
+        currentPrefs()[KEY_PRIVACY_VERSION_SHOWN] ?: SettingsKeys.Defaults.PRIVACY_VERSION_SHOWN
+
+    /** 是否首次启动（同步读取；默认 true）。 */
+    fun isFirstLaunch(): Boolean = currentPrefs()[KEY_FIRST_LAUNCH] ?: true
 
     // ── 写入方法 ──────────────────────────────────────
     // edit 返回写入后的最新快照，随手更新缓存，保证同步 getter 读己之写
@@ -309,6 +322,11 @@ class SettingsManager(context: Context) {
 
     suspend fun setEnableAutoUpdateCheck(enabled: Boolean) {
         cachedPrefs = dataStore.edit { prefs -> prefs[KEY_ENABLE_AUTO_UPDATE_CHECK] = enabled }
+    }
+
+    /** 记录已看过/已处理的隐私政策版本号。 */
+    suspend fun setPrivacyVersionShown(version: String) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_PRIVACY_VERSION_SHOWN] = version }
     }
 
     suspend fun setWallpaperPath(path: String) {

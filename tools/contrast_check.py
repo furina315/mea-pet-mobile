@@ -59,11 +59,6 @@ def desaturate(c, f):
     return tuple(x * (1.0 - f) + 0.5 * f for x in c)
 
 
-def hue_shift(c):
-    """交换 G/B 通道，得到近似 60° 色相偏移的 tertiary。"""
-    return (c[1], c[2], c[0])
-
-
 def luminance(c):
     def lin(x):
         return x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
@@ -79,14 +74,14 @@ def contrast(a, b):
 def light_scheme(seed):
     """对应 Color.kt 的 lightScheme()。"""
     s = desaturate(seed, 0.35)
-    t = hue_shift(seed)
+    t = desaturate(seed, 0.6)
     return {
         "primary": darken(seed, 0.35), "onPrimary": lighten(seed, 0.95),
         "primaryContainer": lighten(seed, 0.82), "onPrimaryContainer": darken(seed, 0.6),
         "secondary": darken(s, 0.35), "onSecondary": lighten(s, 0.95),
         "surfaceVariant": lighten(seed, 0.92), "onSurfaceVariant": darken(seed, 0.3),
         "tertiary": darken(t, 0.35), "onTertiary": lighten(t, 0.95),
-        "tertiaryContainer": lighten(t, 0.82), "onTertiaryContainer": darken(t, 0.6),
+        "tertiaryContainer": lighten(t, 0.77), "onTertiaryContainer": darken(t, 0.6),
     }
 
 
@@ -94,14 +89,14 @@ def dark_scheme(seed):
     """对应 Color.kt 的 darkScheme()。"""
     sp = lighten(seed, 0.5)
     s = desaturate(sp, 0.35)
-    t = hue_shift(sp)
+    t = desaturate(sp, 0.6)
     return {
         "primary": sp, "onPrimary": darken(sp, 0.85),
         "primaryContainer": darken(sp, 0.6), "onPrimaryContainer": lighten(sp, 0.7),
         "secondary": s, "onSecondary": darken(s, 0.85),
         "surfaceVariant": darken(sp, 0.75), "onSurfaceVariant": lighten(sp, 0.4),
         "tertiary": t, "onTertiary": darken(t, 0.85),
-        "tertiaryContainer": darken(t, 0.6), "onTertiaryContainer": lighten(t, 0.7),
+        "tertiaryContainer": darken(t, 0.55), "onTertiaryContainer": lighten(t, 0.7),
     }
 
 

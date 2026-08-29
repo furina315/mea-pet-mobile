@@ -53,6 +53,8 @@ import androidx.compose.ui.window.DialogProperties
 fun PrivacyDialog(
     onAgree: () -> Unit,
     onDisagree: () -> Unit,
+    /** 非首次启动（隐私政策更新）时，主标题下的副标题提示；首次启动为空串不显示。 */
+    subtitle: String = "",
     onViewPrivacyPolicy: () -> Unit = {}
 ) {
     var showFullPolicy by remember { mutableStateOf(false) }
@@ -89,6 +91,14 @@ fun PrivacyDialog(
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                if (subtitle.isNotBlank() && !showFullPolicy) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
                 Spacer(Modifier.height(10.dp))
                 HorizontalDivider()

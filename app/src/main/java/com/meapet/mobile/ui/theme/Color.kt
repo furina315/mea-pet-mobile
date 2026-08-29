@@ -30,9 +30,6 @@ private fun Color.desaturate(f: Float): Color {
     )
 }
 
-/** 交换 G/B 通道得到近似 60° 色相偏移的 tertiary。 */
-private fun Color.hueShift(): Color = Color(green, blue, red)
-
 /**
  * 从单一 seed 主色生成完整浅色方案（模拟动态颜色行为）。
  * 不需要手动为每套预设配副色/容器色。
@@ -43,7 +40,9 @@ private fun Color.hueShift(): Color = Color(green, blue, red)
  */
 private fun lightScheme(seed: Color, bg: Color = Color(0xFFF8F8F8)): ColorScheme {
     val s = seed.desaturate(0.35f)
-    val t = seed.hueShift()
+    // tertiary 用 seed 的更去饱和变体，保持同色相（触摸气泡用）；
+    // 原先 hueShift 交换 G/B 通道会把紫甩成绿、蓝甩成黄绿，与主题色相错位。
+    val t = seed.desaturate(0.6f)
     // 用 seed 轻微染 surface/background，让每个预设的菜单/弹窗底色肉眼可辨
     val tintedBg = Color(
         (bg.red * 0.85f + seed.red * 0.15f).coerceIn(0f, 1f),
@@ -56,18 +55,27 @@ private fun lightScheme(seed: Color, bg: Color = Color(0xFFF8F8F8)): ColorScheme
         secondary = s.darken(0.35f), onSecondary = s.lighten(0.95f),
         secondaryContainer = s.lighten(0.82f), onSecondaryContainer = s.darken(0.6f),
         tertiary = t.darken(0.35f), onTertiary = t.lighten(0.95f),
-        tertiaryContainer = t.lighten(0.82f), onTertiaryContainer = t.darken(0.6f),
+        tertiaryContainer = t.lighten(0.77f), onTertiaryContainer = t.darken(0.6f),
         background = tintedBg, onBackground = seed.darken(0.5f),
         surface = tintedBg, onSurface = seed.darken(0.5f),
         surfaceVariant = seed.lighten(0.92f), onSurfaceVariant = seed.darken(0.3f),
         outline = seed.lighten(0.3f), outlineVariant = seed.lighten(0.75f),
+        // surfaceContainer 系列：M3 弹窗 / 菜单 / 卡片容器默认取这几个，不显式设置
+        // 会回退 lightColorScheme 的默认紫调（清除对话确认框底色发紫的根因）。
+        // 由 tintedBg 逐档压暗，保持与背景同一色相。
+        surfaceContainerLowest = tintedBg,
+        surfaceContainerLow = tintedBg.darken(0.015f),
+        surfaceContainer = tintedBg.darken(0.03f),
+        surfaceContainerHigh = tintedBg.darken(0.05f),
+        surfaceContainerHighest = tintedBg.darken(0.07f),
     )
 }
 
 private fun darkScheme(seed: Color, bg: Color = Color(0xFF1A1A1A)): ColorScheme {
     val sp = seed.lighten(0.5f)
     val s = sp.desaturate(0.35f)
-    val t = sp.hueShift()
+    // 同 lightScheme：tertiary 用更去饱和变体，保持同色相
+    val t = sp.desaturate(0.6f)
     val tintedBg = Color(
         (bg.red * 0.85f + sp.red * 0.15f).coerceIn(0f, 1f),
         (bg.green * 0.85f + sp.green * 0.15f).coerceIn(0f, 1f),
@@ -79,11 +87,17 @@ private fun darkScheme(seed: Color, bg: Color = Color(0xFF1A1A1A)): ColorScheme 
         secondary = s, onSecondary = s.darken(0.85f),
         secondaryContainer = s.darken(0.6f), onSecondaryContainer = s.lighten(0.7f),
         tertiary = t, onTertiary = t.darken(0.85f),
-        tertiaryContainer = t.darken(0.6f), onTertiaryContainer = t.lighten(0.7f),
+        tertiaryContainer = t.darken(0.55f), onTertiaryContainer = t.lighten(0.7f),
         background = tintedBg, onBackground = sp.lighten(0.55f),
         surface = tintedBg, onSurface = sp.lighten(0.55f),
         surfaceVariant = sp.darken(0.75f), onSurfaceVariant = sp.lighten(0.4f),
         outline = sp.darken(0.3f), outlineVariant = sp.darken(0.5f),
+        // surfaceContainer 系列（同 lightScheme 说明）：深色下逐档抬亮。
+        surfaceContainerLowest = tintedBg.darken(0.05f),
+        surfaceContainerLow = tintedBg.lighten(0.02f),
+        surfaceContainer = tintedBg.lighten(0.04f),
+        surfaceContainerHigh = tintedBg.lighten(0.07f),
+        surfaceContainerHighest = tintedBg.lighten(0.10f),
     )
 }
 
@@ -106,11 +120,11 @@ private val S_Steel      = Color(0xFF6A7A8A)
 
 val Purple80 = S_Default.lighten(0.45f)
 val PurpleGrey80 = S_Default.desaturate(0.35f).lighten(0.45f)
-val Pink80 = S_Default.hueShift().lighten(0.45f)
+val Pink80 = S_Default.desaturate(0.6f).lighten(0.45f)
 
 val Purple40 = S_Default
 val PurpleGrey40 = S_Default.desaturate(0.35f)
-val Pink40 = S_Default.hueShift()
+val Pink40 = S_Default.desaturate(0.6f)
 
 // ── 预设注册 ──────────────────────────
 

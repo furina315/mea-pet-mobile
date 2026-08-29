@@ -333,16 +333,3 @@ private fun appearanceSummary(state: SettingsUiState): String {
                 else findPreset(state.colorPreset).name
     return "$mode · $color"
 }
-
-/** 图标来源署名：MDI 是 Apache 2.0，署名非强制但属良好实践。 */
-@Composable
-private fun AttributionSection() {
-    SectionTitle("开源图标")
-    Text(
-        text = "界面图标来自 Material Design Icons (Pictogrammers)，" +
-            "依据 Apache License 2.0 使用。",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_FAINT_TEXT),
-        modifier = Modifier.padding(bottom = 8.dp)
-    )
-}

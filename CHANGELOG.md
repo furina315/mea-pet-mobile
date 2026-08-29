@@ -12,6 +12,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] - 2026-08-29
+
+### Added
+
+- **助手消息 Markdown 渲染** — 接入 Markwon 4.6.2（core / ext-latex / ext-strikethrough / ext-tables / linkify / inline-parser），助手气泡支持代码块、表格、删除线、自动链接；用户气泡与系统提示保持纯文本。
+- **LaTeX 公式渲染** — 基于 jlatexmath，注册 `MarkwonInlineParserPlugin` 并开启行内公式；将 `\[...\]`、`\(...\)`、含数学符号的 `$...$` 统一归一化为 `$$...$$`，首次渲染前显式 init 并预热符号表。
+- **聊天气泡文字选择复制** — 用户气泡用 `SelectionContainer`、助手气泡 `TextView setTextIsSelectable(true)` 并保留 `LinkMovementMethod`；长按弹出系统复制 / 全选菜单，选择与链接点击并存。不改动根布局触摸透传，Live2D 点击互动不受影响。
+- **流式输出自动补全未闭合代码围栏** — 流式渲染时临时补齐代码块围栏，避免半截代码块渲染错乱。
+- **设置界面二级导航** — 设置页重构为「入口列表 + 提供商 / 对话 / 外观 / 语音 / 关于」五个子页，每个入口显示当前状态摘要（模型名、主题、发声开关、版本号），层级更清晰。
+- **ErrorBubble 错误卡片** — 对话流末尾的错误卡片取代原错误 Snackbar：`errorContainer` 底色、右上角关闭、右下角重试，跟随气泡透明度设置。错误为瞬态 UI 状态，不进 `ChatMessage` 也不写会话历史。
+- **应用信息并入关于页** — 新增 `AppInfoSection`；「更新」子页新增手动「检查更新」（按钮、进度、结果文案与发布页链接），启动静默检测仍保留。
+- **MDI 矢量图标** — Material Design Icons（Apache 2.0）批量转为 `VectorDrawable`，附 `tools/svg2vd.py`（Iconify → VectorDrawable）与 `tools/contrast_check.py`（校验 12 套预设 WCAG 对比度）两个工具脚本；关于页附署名。
+- **隐私政策版本号机制** — 新增 `app.privacyVersion` / `app.privacyEffectiveDate` / `app.privacyUpdateDate` 配置（`local.properties` → `BuildConfig` → `AppInfo`），用户已看过的隐私政策版本号（字符串，如 1.1）记录于 DataStore（`privacy_version_shown`）。启动时若记录值不等于当前版本号则重新弹出隐私政策，副标题提示「隐私政策更新」，确保政策更新后老用户重新确认；版本号、生效时间与修订时间展示于隐私政策头部。
+- **启动时「是否启用检查更新」弹窗** — 首次启动时弹出 `AutoUpdateOptInDialog`（复用 `first_launch` 标记，仅首次启动一次，与隐私版本号解耦，政策更新不再重复询问），用户选择「开启 / 不开启」启动自动检查更新，结果写入 `enable_auto_update_check`；不开启时仍可在「关于」页手动检测。
+
+### Changed
+
+- **浅色模式配色对比度修复（12 套预设全部达标 WCAG）** — 原 `lightScheme` 用 `primary = seed` 搭 `onPrimary = seed.darken(0.6f)`，用户气泡对比度仅 1.89~3.90:1，全部低于 WCAG 正文 4.5:1（单色预设几乎不可读）。改为 `primary/secondary/tertiary` 先 `darken(0.35f)` 再配 `lighten(0.95f)` 的近白前景，12 套全部达标（5.51~12.19:1）。仅改浅色方案，深色方案数值不变。
+- **设置代码结构拆分** — `SettingsScreen.kt` 由 1494 行单文件拆为 `ui/screen/settings/` 下八个文件；`SettingsGroup` 改为 `SettingsCard`（组标题可选）；`Page` 枚举由 `CHAT/SETTINGS/PRIVACY` 简化为 `CHAT/SETTINGS`，隐私政策页由顶层下移为设置子页（从政策页返回回到「关于」而非设置根页）。
+- **输入栏改用 `BasicTextField`** — 去掉 M3 `TextField` 装饰盒按状态分档的容器色，避免半透明容器上露底。
+- **清理死代码** — 移除 `AboutDialog`（162 行）、`PrivacyPolicyScreen.kt`、`ChatEvent.CheckForUpdate` 等、`ChatUiState` 的 about 字段、`LIVE2D_MODEL_SOURCE_URL` 及主界面「更多」菜单的「关于」项；`ChatScreen.kt` 由 646 行降至 474 行。
+- **关于页外部链接间距微调** — 「Live2D 模型来源 / GitHub 仓库 / 交流 QQ 群」三条链接的间距由 2dp 调为 3dp，视觉更舒展，点击不易误触。
+- **全局图标统一为 Material Design Icons** — 主页顶部菜单（设置 / 清除对话 / 查看记忆 / 悬浮窗 / 喇叭）、悬浮窗菜单（关闭 / 唤起输入 / 锁定 / 透明度）与两侧输入栏的发送、关闭、拖动抓手，全部由 `material-icons`、手画矢量或字符（✕ / ≡ / 系统 `ic_menu_send`）统一替换为 MDI 矢量图标（`tools/svg2vd.py` 生成），线条风格与设置页一致并随主题染色。
+- **悬浮窗发送按钮与主页对齐** — 尺寸 / 圆形主色底 / 空输入置灰禁用态与主页 `ChatInputBar` 一致；配色经 `OverlayPalette` 复刻主界面 `Color.kt` 派生规则，修正原先 `primary`/`onPrimary` 与主界面不一致的偏差。
+- **触摸气泡色相修正** — 主题 `tertiary` 原由 `hueShift()`（交换 G/B 通道）派生，会把紫甩成绿、蓝甩成黄绿，触摸人物的小气泡底色与主题色相错位；改为 seed 的更去饱和变体（`desaturate(0.6f)`），保留同色相仅更柔和，浅色 / 深色同改。`tools/contrast_check.py` 同步更新并验证 12 套预设全部达标。
+- **预设方案补齐 surfaceContainer 系列** — 原先只设了 `background/surface/surfaceVariant`，M3 弹窗 / 菜单容器默认取的 `surfaceContainerHigh` 等未配置，回退成 `lightColorScheme()` 的默认紫调。现由各自的 `tintedBg` 逐档派生（浅色逐档压暗、深色逐档抬亮），弹窗与菜单底色跟随当前预设。
+- **触摸气泡底色加深** — `tertiaryContainer` 浅色 `lighten(0.82→0.77f)`、深色 `darken(0.6→0.55f)`，触摸提示条更醒目，对比度仍全部达标。
+- **隐私弹窗触发条件改为版本号驱动** — 由「是否已做出选择」改为：首次启动（`first_launch`）必弹；非首次则「已记录版本号 ≠ 当前构建版本号」时弹，与是否同意无关；`PrivacyConsentManager` 移除 `hasUserChosen` / `KEY_USER_CHOSEN`。弹窗判定移入 `LaunchedEffect` 异步执行，避免首帧同步读 DataStore 拖慢启动。
+
+### Fixed
+
+- **输入栏底部亮带（浅色模式）** — Compose 把投影与填充放在同一 `RenderNode`，填充 0.85 透明度时投影渗入内部压暗大部分区域，未被覆盖的一条反而是唯一正确的颜色；将 `shadowElevation` 从 16dp 改为 0dp 解决。
+
+### Notes
+
+- 本版本功能主要来自社区贡献者 [@furina315](https://github.com/furina315)（PR #11、PR #12）。
+- 相对 1.6.0 无破坏性变更，applicationId 不变，可覆盖安装。
+- 新增渲染依赖 Markwon 4.6.2（core / ext-latex / ext-strikethrough / ext-tables / linkify / inline-parser）。
+- 新增 Material Design Icons 矢量图标（Apache 2.0），来源与署名见关于页。
+
+---
+
 ## [1.6.0] - 2026-08-25
 
 ### 大版本总体介绍（自 1.5.0）
@@ -44,7 +86,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **悬浮窗透明度调节在 Android 10+ 部分机型上无效** — 根因见上「Changed」；现已改为 GL 内乘 alpha，所有机型统一生效。
-- **壁纸图片上下颠倒** — `GLUtils.texImage2D` 上传的 Bitmap 纹理方向（顶部 v=0）与离屏 FBO 相反，复用后上下颠倒；改用正确的 UV 映射后照片正立。
 
 ### Notes
 

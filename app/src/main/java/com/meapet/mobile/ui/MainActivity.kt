@@ -21,10 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.meapet.mobile.core.AppInfo
 import com.meapet.mobile.core.PrivacyConsentManager
 import com.meapet.mobile.core.isDarkTheme
 import com.meapet.mobile.app.AppContainer
@@ -33,8 +35,10 @@ import com.meapet.mobile.live2d.Live2dDelegate
 import com.meapet.mobile.live2d.Live2dRenderState
 import com.meapet.mobile.live2d.Live2dRenderer
 import com.meapet.mobile.live2d.overlay.FloatingLive2dService
+import com.meapet.mobile.ui.component.AutoUpdateOptInDialog
 import com.meapet.mobile.ui.screen.ChatScreenContent
 import com.meapet.mobile.ui.theme.MeaPetTheme
+import kotlinx.coroutines.launch
 
 /**
  * 主入口 Activity。
@@ -145,10 +149,36 @@ class MainActivity : ComponentActivity() {
                     Live2dDelegate.getInstance().wallpaperBlur = wallpaperBlur.toFloat()
                 }
 
-                // ── 隐私协议弹窗（首次启动且未做过选择时显示） ──
+                // ── 隐私/更新弹窗 ──
                 val context = androidx.compose.ui.platform.LocalContext.current
-                var showPrivacyDialog by remember {
-                    mutableStateOf(!PrivacyConsentManager.hasUserChosen(context))
+                val scope = rememberCoroutineScope()
+                val settingsManager = container.settingsManager
+                val currentPrivacyVersion = AppInfo.privacyVersion
+
+                var showPrivacyDialog by remember { mutableStateOf(false) }
+                var showUpdateOptInDialog by remember { mutableStateOf(false) }
+                var privacyIsUpdate by remember { mutableStateOf(false) }
+
+                // 启动判定（首帧后异步执行，不阻塞渲染）：
+                // - 首次启动（first_launch）：先落 first_launch=false，再弹隐私政策 + 检查更新。
+                // - 非首次但隐私版本号变化：弹隐私政策，副标题提示「隐私政策更新」。
+                LaunchedEffect(Unit) {
+                    val firstLaunch = settingsManager.isFirstLaunch()
+                    if (firstLaunch) {
+                        settingsManager.markFirstLaunchDone()
+                        settingsManager.setPrivacyVersionShown(currentPrivacyVersion)
+                        showPrivacyDialog = true
+                        showUpdateOptInDialog = true
+                    } else if (settingsManager.getPrivacyVersionShown() != currentPrivacyVersion) {
+                        privacyIsUpdate = true
+                        showPrivacyDialog = true
+                    }
+                }
+
+                /** 隐私弹窗关闭后的统一收尾：记录已看过版本号。 */
+                fun closePrivacyDialog() {
+                    showPrivacyDialog = false
+                    scope.launch { settingsManager.setPrivacyVersionShown(currentPrivacyVersion) }
                 }
 
                 MeaPetTheme(themeMode = themeMode, dynamicColor = enableDynamicColor, colorPreset = colorPreset) {
@@ -157,11 +187,25 @@ class MainActivity : ComponentActivity() {
                             onAgree = {
                                 PrivacyConsentManager.setAgreed(context, true)
                                 (applicationContext as? MeaPetApplication)?.initUmengSdk()
-                                showPrivacyDialog = false
+                                closePrivacyDialog()
                             },
                             onDisagree = {
                                 PrivacyConsentManager.setAgreed(context, false)
-                                showPrivacyDialog = false
+                                closePrivacyDialog()
+                            },
+                            subtitle = if (privacyIsUpdate) "隐私政策更新" else ""
+                        )
+                    }
+                    // 等隐私弹窗关闭后再显示，避免首次启动两弹窗叠加
+                    if (showUpdateOptInDialog && !showPrivacyDialog) {
+                        AutoUpdateOptInDialog(
+                            onEnable = {
+                                scope.launch { settingsManager.setEnableAutoUpdateCheck(true) }
+                                showUpdateOptInDialog = false
+                            },
+                            onDisable = {
+                                scope.launch { settingsManager.setEnableAutoUpdateCheck(false) }
+                                showUpdateOptInDialog = false
                             }
                         )
                     }

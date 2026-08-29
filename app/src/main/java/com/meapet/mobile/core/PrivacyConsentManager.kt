@@ -19,6 +19,9 @@ import kotlinx.coroutines.withTimeout
  * - 同意后：友盟 SDK 正式初始化，开始采集并上报数据。
  * - 取消授权后：停止上报（后续冷启动不再 init），App 其余功能不受影响。
  *
+ * 是否需要弹窗由隐私政策版本号（DataStore `privacy_version_shown`）决定，
+ * 见 SettingsManager / MainActivity；此处只负责授权状态本身的读写。
+ *
  * 使用 SharedPreferences 做同步读写，保证 [isAgreed] 可在 Application.onCreate 中同步判断。
  */
 object PrivacyConsentManager {
@@ -26,7 +29,6 @@ object PrivacyConsentManager {
     private const val TAG = "PrivacyConsentManager"
     private const val PREFS_NAME = "privacy_consent"
     private const val KEY_AGREED = "umeng_privacy_agreed"
-    private const val KEY_USER_CHOSEN = "privacy_user_chosen"
 
     /** DataStore 同步写入的超时上限（毫秒）：授权弹窗点击路径，给磁盘繁忙留余量但防无限阻塞。 */
     private const val DATASTORE_WRITE_TIMEOUT_MS = 2000L
@@ -40,10 +42,6 @@ object PrivacyConsentManager {
     fun isAgreed(context: Context): Boolean =
         prefs(context).getBoolean(KEY_AGREED, false)
 
-    /** 用户是否已经做出过选择（同意或不同意都算），用于判断是否需要弹窗。 */
-    fun hasUserChosen(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_USER_CHOSEN, false)
-
     /** 授权状态 Flow（响应式订阅）。 */
     fun agreedFlow(context: Context): Flow<Boolean> =
         context.appDataStore.data.map { it[KEY_DS_AGREED] ?: false }
@@ -55,7 +53,6 @@ object PrivacyConsentManager {
         // apply() 的异步落盘可能来不及，导致重启后仍读到旧的授权状态。
         prefs(context).edit()
             .putBoolean(KEY_AGREED, agreed)
-            .putBoolean(KEY_USER_CHOSEN, true)
             .commit()
         // 同步写入 DataStore 供 Flow 订阅。此调用发生在用户点击授权弹窗按钮时
         // （非冷启动热路径），加超时上限避免异常情况下无限阻塞主线程；

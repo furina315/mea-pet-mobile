@@ -35,7 +35,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.meapet.mobile.core.AppInfo
 import com.meapet.mobile.ui.component.LinkItem
 import com.meapet.mobile.viewmodel.SettingsUiState
@@ -86,11 +85,11 @@ internal fun AppInfoSection() {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(Modifier.height(2.dp))
+    Spacer(Modifier.height(3.dp))
     LinkItem("Live2D 模型来源", LIVE2D_MODEL_SOURCE_URL, uriHandler, linkStyle)
-    Spacer(Modifier.height(2.dp))
+    Spacer(Modifier.height(3.dp))
     LinkItem("GitHub 仓库", AppInfo.gitRepoUrl, uriHandler, linkStyle)
-    Spacer(Modifier.height(2.dp))
+    Spacer(Modifier.height(3.dp))
     LinkItem("交流 QQ 群", AppInfo.qqGroupUrl, uriHandler, linkStyle)
 
     Spacer(Modifier.height(6.dp))
@@ -301,6 +300,19 @@ internal fun PrivacySection(
             }
         )
     }
+}
+
+/** 图标来源署名：MDI 是 Apache 2.0，署名非强制但属良好实践。 */
+@Composable
+internal fun AttributionSection() {
+    SectionTitle("开源图标")
+    Text(
+        text = "界面图标来自 Material Design Icons (Pictogrammers)，" +
+            "依据 Apache License 2.0 使用。",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_FAINT_TEXT),
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
 }
 
 // ═══════════════════════════════════════════════════
