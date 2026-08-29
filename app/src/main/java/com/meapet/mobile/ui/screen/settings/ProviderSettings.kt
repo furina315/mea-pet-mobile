@@ -219,10 +219,14 @@ internal fun ModelParamsSection(
 
     Spacer(Modifier.height(8.dp))
 
-    Text(
-        text = "Temperature: ${"%.2f".format(local.temperature)}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+    ParamLabelWithHelp(
+        label = "Temperature: ${"%.2f".format(local.temperature)}",
+        helpTitle = "Temperature（随机度）",
+        helpText = "决定回复的随机程度。数值越低，模型越倾向挑高概率的词，回答更稳定、" +
+            "更贴合设定；越高则用词更多样、更有意外感，但也更容易偏题或前后矛盾。\n\n" +
+            "桌宠闲聊建议 0.8~1.2；需要它严格听指令时降到 0.3 以下。\n\n" +
+            "注意：设为 0 也不保证每次输出完全一致；部分提供商上限为 1.0，" +
+            "推理模型会忽略此参数。"
     )
     Slider(
         value = local.temperature,
