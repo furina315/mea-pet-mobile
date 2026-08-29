@@ -58,8 +58,11 @@ class OverlayInputWindow(
         /** 圆角半径，dp。 */
         private const val CORNER_RADIUS_DP = 20f
 
-        /** 发送按钮直径，dp。 */
-        private const val SEND_BUTTON_DP = 34
+        /** 发送按钮直径，dp（主页 40dp 减 4px ≈ 36dp，适配紧凑输入条）。 */
+        private const val SEND_BUTTON_DP = 36
+
+        /** 发送图标边长，dp（与主页一致）。 */
+        private const val SEND_ICON_DP = 20
 
         /** 与人物正下方的间距，dp。 */
         private const val GAP_DP = 8f
@@ -119,6 +122,12 @@ class OverlayInputWindow(
                     false
                 }
             }
+            // 输入变化时刷新发送钮可用态（与主页的空输入置灰一致）
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) = refreshSendButton()
+            })
         }
 
         loadingView = ProgressBar(ctx).apply {
@@ -126,16 +135,15 @@ class OverlayInputWindow(
             indeterminateTintList = ColorStateList.valueOf(palette.primary)
         }
 
-        // 圆形主色发送按钮（MDI send 图标）
+        // 圆形主色发送按钮（MDI send 图标）；尺寸/禁用态与主页 ChatInputBar 一致
+        // 初始禁用态在 init 末尾统一刷新（editText/sendButton 均就绪后）
         sendButton = ImageButton(ctx).apply {
             setImageResource(R.drawable.ic_send)
-            setColorFilter(palette.onPrimary)
-            background = oval(palette.primary)
             contentDescription = "发送"
             setOnClickListener { sendIfPossible() }
         }
 
-        // 发送区：发送按钮 / 加载指示互换
+        // 发送区：发送按钮 / 加载指示互换；发送图标约束为 20dp 居中（与主页一致）
         val sendContainer = FrameLayout(ctx).apply {
             addView(
                 sendButton,
@@ -146,6 +154,11 @@ class OverlayInputWindow(
                 FrameLayout.LayoutParams(dp(SEND_BUTTON_DP), dp(SEND_BUTTON_DP), Gravity.CENTER)
             )
         }
+        sendButton.scaleType = ImageView.ScaleType.CENTER_INSIDE
+        sendButton.setPadding(
+            dp((SEND_BUTTON_DP - SEND_ICON_DP) / 2), dp((SEND_BUTTON_DP - SEND_ICON_DP) / 2),
+            dp((SEND_BUTTON_DP - SEND_ICON_DP) / 2), dp((SEND_BUTTON_DP - SEND_ICON_DP) / 2)
+        )
 
         // 关闭按钮（MDI close 图标）
         val closeButton = ImageView(ctx).apply {
@@ -184,6 +197,9 @@ class OverlayInputWindow(
             addView(sendContainer, LinearLayout.LayoutParams(dp(SEND_BUTTON_DP), dp(SEND_BUTTON_DP)))
             addView(closeButton, LinearLayout.LayoutParams(dp(32), dp(36)))
         }
+
+        // 初始禁用态刷新（此刻 editText 与 sendButton 均已就绪）
+        refreshSendButton()
     }
 
     /** 是否已显示在屏幕上。 */
@@ -219,6 +235,7 @@ class OverlayInputWindow(
     /** 清空已输入的文字。 */
     fun clearText() {
         editText.setText("")
+        refreshSendButton()
     }
 
     /**
@@ -282,6 +299,25 @@ class OverlayInputWindow(
         val text = editText.text?.toString()?.trim().orEmpty()
         if (text.isEmpty()) return
         onSend(text)
+    }
+
+    /**
+     * 依据输入框是否为空刷新发送钮的可用态与配色，与主页 ChatInputBar 一致：
+     * 可用 = 实色 primary 圆 + onPrimary 图标；禁用 = 40% 透明。
+     */
+    private fun refreshSendButton() {
+        val hasText = !editText.text.isNullOrBlank()
+        sendButton.isEnabled = hasText
+        val alpha = if (hasText) 1f else 0.4f
+        sendButton.background = oval(withAlpha(palette.primary, alpha))
+        // 用 imageTintList（SRC_IN 准确上色）而非 setColorFilter（SRC_ATOP 相乘发灰）
+        sendButton.imageTintList = ColorStateList.valueOf(withAlpha(palette.onPrimary, alpha))
+    }
+
+    /** 颜色整体缩放 alpha（0~1），用于禁用态配色。 */
+    private fun withAlpha(color: Int, alpha: Float): Int {
+        val a = (android.graphics.Color.alpha(color) * alpha).roundToInt()
+        return (color and 0x00FFFFFF) or (a shl 24)
     }
 
     private fun oval(color: Int): GradientDrawable =

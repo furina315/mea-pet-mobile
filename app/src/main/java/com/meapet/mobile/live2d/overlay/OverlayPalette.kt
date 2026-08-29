@@ -96,8 +96,8 @@ object OverlayPalette {
 
     /** 浅色套（seed 未提亮，对齐 ui/theme/Color.kt 的 lightScheme）。 */
     private fun lightColors(seed: Int): OverlayColors = OverlayColors(
-        primary = seed,
-        onPrimary = darken(seed, 0.6f),
+        primary = darken(seed, 0.35f),
+        onPrimary = lighten(seed, 0.95f),
         surfaceVariant = lighten(seed, 0.92f),
         onSurfaceVariant = darken(seed, 0.3f),
         onSurface = darken(seed, 0.5f),

@@ -31,8 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **设置代码结构拆分** — `SettingsScreen.kt` 由 1494 行单文件拆为 `ui/screen/settings/` 下八个文件；`SettingsGroup` 改为 `SettingsCard`（组标题可选）；`Page` 枚举由 `CHAT/SETTINGS/PRIVACY` 简化为 `CHAT/SETTINGS`，隐私政策页由顶层下移为设置子页（从政策页返回回到「关于」而非设置根页）。
 - **输入栏改用 `BasicTextField`** — 去掉 M3 `TextField` 装饰盒按状态分档的容器色，避免半透明容器上露底。
 - **清理死代码** — 移除 `AboutDialog`（162 行）、`PrivacyPolicyScreen.kt`、`ChatEvent.CheckForUpdate` 等、`ChatUiState` 的 about 字段、`LIVE2D_MODEL_SOURCE_URL` 及主界面「更多」菜单的「关于」项；`ChatScreen.kt` 由 646 行降至 474 行。
-- **关于页外部链接间距微调** — 「Live2D 模型来源 / GitHub 仓库 / 交流 QQ 群」三条链接的间距由 2dp 调为 3dp，视觉更舒展。
+- **关于页外部链接间距微调** — 「Live2D 模型来源 / GitHub 仓库 / 交流 QQ 群」三条链接的间距由 2dp 调为 3dp，视觉更舒展，点击不易误触。
 - **全局图标统一为 Material Design Icons** — 主页顶部菜单（设置 / 清除对话 / 查看记忆 / 悬浮窗 / 喇叭）、悬浮窗菜单（关闭 / 唤起输入 / 锁定 / 透明度）与两侧输入栏的发送、关闭、拖动抓手，全部由 `material-icons`、手画矢量或字符（✕ / ≡ / 系统 `ic_menu_send`）统一替换为 MDI 矢量图标（`tools/svg2vd.py` 生成），线条风格与设置页一致并随主题染色。
+- **悬浮窗发送按钮与主页对齐** — 尺寸 / 圆形主色底 / 空输入置灰禁用态与主页 `ChatInputBar` 一致；配色经 `OverlayPalette` 复刻主界面 `Color.kt` 派生规则，修正原先 `primary`/`onPrimary` 与主界面不一致的偏差。
+- **触摸气泡色相修正** — 主题 `tertiary` 原由 `hueShift()`（交换 G/B 通道）派生，会把紫甩成绿、蓝甩成黄绿，触摸人物的小气泡底色与主题色相错位；改为 seed 的更去饱和变体（`desaturate(0.6f)`），保留同色相仅更柔和，浅色 / 深色同改。`tools/contrast_check.py` 同步更新并验证 12 套预设全部达标。
+- **预设方案补齐 surfaceContainer 系列** — 原先只设了 `background/surface/surfaceVariant`，M3 弹窗 / 菜单容器默认取的 `surfaceContainerHigh` 等未配置，回退成 `lightColorScheme()` 的默认紫调。现由各自的 `tintedBg` 逐档派生（浅色逐档压暗、深色逐档抬亮），弹窗与菜单底色跟随当前预设。
+- **触摸气泡底色加深** — `tertiaryContainer` 浅色 `lighten(0.82→0.77f)`、深色 `darken(0.6→0.55f)`，触摸提示条更醒目，对比度仍全部达标。
 
 ### Fixed
 
