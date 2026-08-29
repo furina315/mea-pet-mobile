@@ -13,7 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Lightbulb
@@ -59,7 +58,6 @@ fun OverlayMenu(
     onClearConversation: () -> Unit = {},
     onShowMemories: () -> Unit = {},
     onToggleOverlay: () -> Unit = {},
-    onAbout: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -142,8 +140,6 @@ fun OverlayMenu(
                             MenuEntry("查看记忆", Icons.Outlined.Lightbulb) { menuExpanded = false; onShowMemories() }
                             HorizontalDivider()
                             MenuEntry("悬浮窗", Icons.Outlined.PictureInPictureAlt) { menuExpanded = false; onToggleOverlay() }
-                            HorizontalDivider()
-                            MenuEntry("关于", Icons.Default.Info) { menuExpanded = false; onAbout() }
                         }
                     }
                 }
