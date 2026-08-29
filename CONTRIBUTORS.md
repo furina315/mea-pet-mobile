@@ -13,7 +13,7 @@
 | 头像 | GitHub | 贡献 |
 |:----:|--------|------|
 | <img src="https://github.com/starmiaoa.png" width="48" height="48" alt="starmiaoa"> | [@starmiaoa](https://github.com/starmiaoa) | 记忆 / 聊天 / 悬浮窗 / 设置链路关键缺陷修复，获取模型列表，`/v1` API 路径自动拼接（PR #5 等） |
-| <img src="https://github.com/furina315.png" width="48" height="48" alt="furina315"> | [@furina315](https://github.com/furina315) | 助手消息 Markdown / LaTeX 渲染 + 聊天气泡文字选择复制（PR #11） |
+| <img src="https://github.com/furina315.png" width="48" height="48" alt="furina315"> | [@furina315](https://github.com/furina315) | 助手消息 Markdown / LaTeX 渲染 + 气泡文字选择复制（PR #11）；设置界面二级导航重构、ErrorBubble 错误卡片、浅色配色 WCAG 对比度修复、21 个矢量图标（PR #12） |
 | <img src="https://github.com/FlexiAtom.png" width="48" height="48" alt="FlexiAtom"> | [@FlexiAtom](https://github.com/FlexiAtom) | System Prompt 恢复默认（PR #7） |
 
 ---

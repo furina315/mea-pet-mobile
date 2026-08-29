@@ -20,12 +20,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LaTeX 公式渲染** — 基于 jlatexmath，注册 `MarkwonInlineParserPlugin` 并开启行内公式；将 `\[...\]`、`\(...\)`、含数学符号的 `$...$` 统一归一化为 `$$...$$`，首次渲染前显式 init 并预热符号表。
 - **聊天气泡文字选择复制** — 用户气泡用 `SelectionContainer`、助手气泡 `TextView setTextIsSelectable(true)` 并保留 `LinkMovementMethod`；长按弹出系统复制 / 全选菜单，选择与链接点击并存。不改动根布局触摸透传，Live2D 点击互动不受影响。
 - **流式输出自动补全未闭合代码围栏** — 流式渲染时临时补齐代码块围栏，避免半截代码块渲染错乱。
+- **设置界面二级导航** — 设置页重构为「入口列表 + 提供商 / 对话 / 外观 / 语音 / 关于」五个子页，每个入口显示当前状态摘要（模型名、主题、发声开关、版本号），层级更清晰。
+- **ErrorBubble 错误卡片** — 对话流末尾的错误卡片取代原错误 Snackbar：`errorContainer` 底色、右上角关闭、右下角重试，跟随气泡透明度设置。错误为瞬态 UI 状态，不进 `ChatMessage` 也不写会话历史。
+- **应用信息并入关于页** — 新增 `AppInfoSection`；「更新」子页新增手动「检查更新」（按钮、进度、结果文案与发布页链接），启动静默检测仍保留。
+- **21 个 MDI 矢量图标** — Material Design Icons（Apache 2.0）批量转为 `VectorDrawable`（共约 10KB），关于页附署名；附 `tools/svg2vd.py`（Iconify → VectorDrawable）与 `tools/contrast_check.py`（校验 12 套预设 WCAG 对比度）两个工具脚本。
+
+### Changed
+
+- **浅色模式配色对比度修复（12 套预设全部达标 WCAG）** — 原 `lightScheme` 用 `primary = seed` 搭 `onPrimary = seed.darken(0.6f)`，用户气泡对比度仅 1.89~3.90:1，全部低于 WCAG 正文 4.5:1（单色预设几乎不可读）。改为 `primary/secondary/tertiary` 先 `darken(0.35f)` 再配 `lighten(0.95f)` 的近白前景，12 套全部达标（5.51~12.19:1）。仅改浅色方案，深色方案数值不变。
+- **设置代码结构拆分** — `SettingsScreen.kt` 由 1494 行单文件拆为 `ui/screen/settings/` 下八个文件；`SettingsGroup` 改为 `SettingsCard`（组标题可选）；`Page` 枚举由 `CHAT/SETTINGS/PRIVACY` 简化为 `CHAT/SETTINGS`，隐私政策页由顶层下移为设置子页（从政策页返回回到「关于」而非设置根页）。
+- **输入栏改用 `BasicTextField`** — 去掉 M3 `TextField` 装饰盒按状态分档的容器色，避免半透明容器上露底。
+- **清理死代码** — 移除 `AboutDialog`（162 行）、`PrivacyPolicyScreen.kt`、`ChatEvent.CheckForUpdate` 等、`ChatUiState` 的 about 字段、`LIVE2D_MODEL_SOURCE_URL` 及主界面「更多」菜单的「关于」项；`ChatScreen.kt` 由 646 行降至 474 行。
+- **关于页外部链接间距微调** — 「Live2D 模型来源 / GitHub 仓库 / 交流 QQ 群」三条链接的间距由 2dp 调为 3dp，视觉更舒展。
+
+### Fixed
+
+- **输入栏底部亮带（浅色模式）** — Compose 把投影与填充放在同一 `RenderNode`，填充 0.85 透明度时投影渗入内部压暗大部分区域，未被覆盖的一条反而是唯一正确的颜色；将 `shadowElevation` 从 16dp 改为 0dp 解决。
+- **从隐私政策页返回弹回设置根页** — 政策页由顶层 `Page.PRIVACY` 下移为设置子页 `SettingsPage.POLICY`，返回正确回到「关于」。
 
 ### Notes
 
-- 本版本功能来自社区贡献者 [@furina315](https://github.com/furina315)（PR #11）。
+- 本版本功能主要来自社区贡献者 [@furina315](https://github.com/furina315)（PR #11、PR #12）。
 - 相对 1.6.0 无破坏性变更，applicationId 不变，可覆盖安装。
 - 新增渲染依赖 Markwon 4.6.2（core / ext-latex / ext-strikethrough / ext-tables / linkify / inline-parser）。
+- 新增 21 个 Material Design Icons 矢量图标（Apache 2.0），来源与署名见关于页。
 
 ---
 
