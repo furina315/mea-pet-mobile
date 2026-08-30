@@ -42,8 +42,8 @@ android {
         applicationId = "com.meapet.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode =  11
-        versionName = "1.7.0"
+        versionCode =  12
+        versionName = "1.7.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -87,13 +87,8 @@ android {
         compose = true
         buildConfig = true
     }
-    // 原生 libonnxruntime.so 改为运行时按需下载（减小 APK），故此处排除 AAR 内嵌的 .so；
-    // 仅保留 onnxruntime-android 的 Java/JNI 绑定层（libonnxruntime4j_jni.so 体积很小）。
-    packaging {
-        jniLibs {
-            excludes += "lib/**/libonnxruntime.so"
-        }
-    }
+    // ONNX Runtime 原生库（libonnxruntime.so）随 AAR 打包进 APK，由上方 abiFilters
+    // 限制为仅 arm64-v8a / armeabi-v7a 两份；ONNX 模型仍走运行时下载 / 本地导入。
     // OpenJTalk 词典/拼音表等大文本 assets 需禁压缩（否则 aapt 压缩后某些读取路径会失败）
     aaptOptions {
         noCompress += listOf("bin", "dic", "txt")
@@ -154,7 +149,7 @@ dependencies {
     implementation(libs.umeng.umsdk.common)  // 必选：统计核心
     implementation(libs.umeng.umsdk.asms)    // 必选：重要组件
 
-    // 本地 VITS TTS：ONNX Runtime（Java 绑定；原生 libonnxruntime.so 运行时按需下载，见 TtsModelManager）
+    // 本地 VITS TTS：ONNX Runtime（原生 so 随 AAR 打包进 APK，仅 v8a/v7a；模型仍走运行时下载，见 TtsModelManager）
     implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)

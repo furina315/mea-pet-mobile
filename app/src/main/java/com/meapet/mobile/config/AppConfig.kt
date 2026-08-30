@@ -39,7 +39,7 @@ data class AppConfig(
     val enableAutoSummary: Boolean = true,
     val appVersion: String = "1.0.0",
     /**
-     * TTS 模型下载基础地址（4 个 onnx + 原生库所在目录，尾部不带文件名）。
+     * TTS 模型下载基础地址（4 个 onnx 所在目录，尾部不带文件名）。
      * 经 BuildConfig 从 local.properties 注入；空 = 未配置，下载入口提示。
      */
     val ttsModelBaseUrl: String = ""

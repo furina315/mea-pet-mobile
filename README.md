@@ -131,9 +131,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 | 操作 | 说明 |
 |------|------|
-| **下载模型** | 从 GitHub Releases 拉取约 92MB（4 个 ONNX 模型 + 当前设备架构的 ONNX Runtime 原生库），支持断点续传 |
+| **下载模型** | 从 GitHub Releases 拉取约 73MB（4 个 ONNX 模型；ONNX Runtime 原生库随 APK 打包，无需下载），支持断点续传 |
 | **从本地导入** | 网络受限无法访问 GitHub 时，从本地 zip 资源包导入（详见下文「资源包格式」）。导入完成后自动切换为就绪状态 |
-| **删除模型** | 已就绪时显示，删除模型与运行库释放空间（会同时关闭语音开关） |
+| **删除模型** | 已就绪时显示，删除模型释放空间（会同时关闭语音开关） |
 
 **发声**（模型就绪后开放，未就绪置灰）：
 
@@ -149,10 +149,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ```
 enc_p.onnx  dp.onnx  flow.onnx  dec.onnx
-libonnxruntime-<abi>.so            # 各 ABI 的 ONNX Runtime 原生库
 ```
 
-导入规则：**ONNX 全量导入**；**原生库按当前设备 ABI 选择性导入**（只落盘匹配的那一份）。兼容打包时误嵌套子文件夹的情况（自动在子目录中查找，最多 2 层）。
+导入规则：**4 个 ONNX 全量导入**（ONNX Runtime 原生库随 APK 分发，资源包无需携带；旧资源包里多余的 so 会被跳过）。兼容打包时误嵌套子文件夹的情况（自动在子目录中查找，最多 2 层）。
 
 #### 关于
 

@@ -12,6 +12,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.1] - 2026-08-30
+
+### Added
+
+- **Temperature 参数说明气泡** — 「提供商」子页 Temperature 滑杆标签旁新增问号图标，点击弹出 RichTooltip：讲解参数作用、桌宠场景建议取值（闲聊 0.8~1.2、严格听指令降到 0.3 以下），及「设为 0 不保证输出一致 / 部分提供商上限 1.0 / 推理模型忽略此参数」三条注意事项；气泡带「知道了」按钮，返回键先关气泡再翻页。新增通用组件 `ParamLabelWithHelp`（`SettingsCommon.kt`，参数标签 + 说明气泡），其余参数滑杆可直接复用；新图标 `ic_help_outline`（MDI help-circle-outline，Apache 2.0，516 字节），经 `tools/svg2vd.py` 生成，清单同步至 `tools/icons.txt`。
+
+### Changed
+
+- **ONNX Runtime 升 1.24.3 且原生库随 APK 打包** — 1.23.2 在部分骁龙 Soc 上 CPU provider 的 KleidiAI SME MatMul 路径触发 SIGILL 崩溃（[onnxruntime#26921](https://github.com/microsoft/onnxruntime/issues/26921)），升 1.24.3 修复。`libonnxruntime.so` 由「运行时按需下载」改为随 APK 打包（`abiFilters` 仅保留 arm64-v8a / armeabi-v7a，APK 增大约 44MB）；4 个 ONNX 模型仍按需下载 / 本地 zip 导入，TTS 资源包不再携带 so（导入旧资源包时多余 so 自动跳过）。老版本下载到 `filesDir/tts_model/lib/` 的残留原生库启动后异步清理。
+
+### Fixed
+- **[#15](https://github.com/llz121517/mea-pet-mobile/issues/15)** TTS 功能在部分骁龙 Soc 上触发 SIGILL 崩溃的问题
+
+### Notes
+
+- Temperature 参数说明气泡来自社区贡献者 [@furina315](https://github.com/furina315)（PR #16）。
+
+---
+
 ## [1.7.0] - 2026-08-29
 
 ### Added
