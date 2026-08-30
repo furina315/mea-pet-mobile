@@ -1,5 +1,6 @@
 package com.meapet.mobile.ui.screen.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -7,22 +8,36 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RichTooltip
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.meapet.mobile.R
+import kotlinx.coroutines.launch
 
 // ═══════════════════════════════════════════════════
 //  设置页公共件：视觉常量、Slider 规格、基础行/分组组件
@@ -86,6 +101,68 @@ internal const val TTS_SPEED_STEPS = 14
 /** 失焦时保存的扩展（统一 onFocusChanged 样板）。 */
 internal fun Modifier.saveOnFocusChange(action: () -> Unit): Modifier =
     onFocusChanged { if (!it.isFocused) action() }
+
+/**
+ * 带说明气泡的参数标签：文字 + 一个问号图标，点图标弹出 [RichTooltip] 讲解该参数。
+ *
+ * `isPersistent = true` 且关掉 `enableUserInput`：默认手势是长按/悬停且会超时自行消失，
+ * 说明文字来不及读完。改为图标 onClick 主动 `show()`。
+ *
+ * @param label 参数名与当前值，如 `Temperature: 0.70`
+ * @param helpTitle 气泡标题
+ * @param helpText 气泡正文
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ParamLabelWithHelp(
+    label: String,
+    helpTitle: String,
+    helpText: String
+) {
+    val tooltipState = rememberTooltipState(isPersistent = true)
+    val scope = rememberCoroutineScope()
+
+    // 气泡是独立 Popup 窗口，不随页面动画走。不在这里吃掉返回，侧滑就会被
+    // SettingsScreen 的 BackHandler 抢去翻页，气泡则悬在新页面上再消失。
+    BackHandler(enabled = tooltipState.isVisible) { tooltipState.dismiss() }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                TooltipAnchorPosition.Below
+            ),
+            tooltip = {
+                RichTooltip(
+                    title = { Text(helpTitle) },
+                    action = {
+                        TextButton(onClick = { tooltipState.dismiss() }) { Text("知道了") }
+                    }
+                ) {
+                    Text(helpText)
+                }
+            },
+            state = tooltipState,
+            enableUserInput = false
+        ) {
+            IconButton(
+                onClick = { scope.launch { tooltipState.show() } },
+                modifier = Modifier.size(28.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_help_outline),
+                    contentDescription = "$helpTitle 说明",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_FAINT_TEXT),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
 
 /**
  * 设置卡片：圆角半透明 Surface 容器，可选组标题。
