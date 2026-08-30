@@ -36,10 +36,6 @@ Android 上的 Live2D AI 桌宠：在主页与系统悬浮窗里渲染 Live2D �
 
 从 [Releases](https://github.com/llz121517/mea-pet-mobile/releases) 页面下载最新的 APK 直接安装，无需自行编译。
 
-```bash
-adb install MeaPet-v1.7.0.APK
-```
-
 #### 方式二：手动编译
 
 **1. 克隆仓库**

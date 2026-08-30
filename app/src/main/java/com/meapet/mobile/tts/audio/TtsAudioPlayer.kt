@@ -16,6 +16,9 @@ import com.meapet.mobile.tts.TtsSynthesizer
  * ## 线程模型（修复并发写同一 AudioTrack 的竞态）
  * - **每段新建一个 AudioTrack**（[obtainTrack] 不复用）：被 stop 打断过的 track 状态不可信，
  *   复用是"两线程同写一个 track"的根源；每段新建彻底消除该竞态。
+ * - **play/stop 串行化（playLock）**："停旧段 → 取新号 → 启新线程"整体在 [playLock] 内
+ *   原子完成，杜绝两个 play 并发时互相 pause/flush、或"上一段残留兜底"release 掉
+ *   他段新 track 的竞态（偶发无声的两个来源）。stop 在锁上排队，最长等一次 join 超时。
  * - 每段音频带一个单调递增的**代际令牌（generation）**：[stop] 会使旧令牌失效，
  *   专用线程在 write 前后比对令牌，过期段直接丢弃，不会写出。
  * - [stop]/[release] 先 **pause/flush** 解除写线程在 native `write()` 上的阻塞（Java interrupt
@@ -26,6 +29,11 @@ import com.meapet.mobile.tts.TtsSynthesizer
  * 不能用来判断播完。这里用 [AudioTrack.setPlaybackPositionUpdateListener] 注册
  * **末尾帧位置标记**，硬件播放头推进到该帧才回调 [onPlaybackComplete]——这是真实进度。
  * 播放/创建失败路径同样会回调 [onPlaybackComplete]，保证上层 isPlaying 状态能复位。
+ *
+ * ## 诊断日志约定
+ * `write()` 的返回值**必须记录**：阻塞写被并发 pause/flush 提前解除时会**短写返回**
+ * （剩余样本被丢弃、末尾 marker 永不到达），忽略返回值会让"无声"与正常播放
+ * 在日志上不可区分。全写/短写/错误码三条路径各有独立日志。
  */
 class TtsAudioPlayer {
 
@@ -48,6 +56,9 @@ class TtsAudioPlayer {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /** 段调度锁：play/stop/release 的"停旧 + 启新"序列在此锁内串行，杜绝跨段冲写/误释放。 */
+    private val playLock = Any()
+
     /** 当前 AudioTrack，仅在专用写线程上读写；stop/release 在主调线程经锁同步访问。 */
     private val trackLock = Any()
     private var track: AudioTrack? = null
@@ -60,49 +71,50 @@ class TtsAudioPlayer {
     private val generationLock = Any()
     private var generation = 0
 
-    /** 当前片段总帧数（用于位置标记）。 */
-    @Volatile
-    private var totalFrames = 0
-
     /**
      * fp32 波形（[-1,1]）→ int16 并播放。对应参考 `audio * 32767` 转 int16。
      * 新段到达会先停止旧段。
      */
     fun play(audio: FloatArray) {
-        Log.d(TAG, "play: audio=${audio.size} 样本 (~${audio.size / (SAMPLE_RATE / 1000f) / 1000f}s)")
+        Log.d(TAG, "play: audio=${audio.size} 样本 (~${audio.size / (SAMPLE_RATE / 1000f) / 1000f}s)，thread=${Thread.currentThread().name}")
+        // PCM 转换放锁外：与段调度无关，长段转换不应阻塞 stop（触摸语音互斥路径）
         val pcm = ShortArray(audio.size) { i ->
             (audio[i].coerceIn(-1f, 1f) * 32767f).toInt().toShort()
         }
-        // 先停旧段（含 join 等待其写线程退出），再发新段
-        stopInternal()
-        val gen = synchronized(generationLock) { ++generation }
-        isPlaying = true
-        playThread = Thread({ writePcm(pcm, gen) }, "TtsAudioPlayer").apply {
-            isDaemon = true
-            start()
+        synchronized(playLock) {
+            // 先停旧段（含 join 等待其写线程退出），再发新段
+            stopInternal()
+            val gen = synchronized(generationLock) { ++generation }
+            isPlaying = true
+            playThread = Thread({ writePcm(pcm, gen) }, "TtsAudioPlayer").apply {
+                isDaemon = true
+                start()
+            }
+            Log.d(TAG, "play: 已提交写线程 gen=$gen")
         }
-        Log.d(TAG, "play: 已提交写线程 gen=$gen")
     }
 
     /** 停止当前播放。 */
     fun stop() {
-        Log.d(TAG, "stop() 调用")
-        stopInternal()
+        Log.d(TAG, "stop() 调用（thread=${Thread.currentThread().name}）")
+        synchronized(playLock) { stopInternal() }
     }
 
     /** 释放资源：先停并等写线程退出，再释放 track。 */
     fun release() {
         Log.d(TAG, "release() 调用")
-        stopInternal()
-        synchronized(trackLock) {
-            track?.let {
-                try {
-                    it.stop(); it.release()
-                } catch (e: Exception) {
-                    Log.w(TAG, "release AudioTrack 异常", e)
+        synchronized(playLock) {
+            stopInternal()
+            synchronized(trackLock) {
+                track?.let {
+                    try {
+                        it.stop(); it.release()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "release AudioTrack 异常", e)
+                    }
                 }
+                track = null
             }
-            track = null
         }
     }
 
@@ -116,6 +128,8 @@ class TtsAudioPlayer {
      * 唯一的解除手段是从另一线程对同一 track 调 `pause()` / `flush()`（write 随即返回）。
      * 必须先停 track 再 join，否则 join 会超时、留下"仍卡在 write() 里的旧写线程"，
      * 与下一段的写线程并发操作同一 track（AudioTrack 非线程安全）→ 状态损坏 → 随机无声。
+     *
+     * **调用约束**：仅在持有 [playLock] 时调用（play/stop/release 内部）。
      */
     private fun stopInternal() {
         synchronized(generationLock) { generation++ }   // 旧段令牌失效
@@ -169,6 +183,7 @@ class TtsAudioPlayer {
                 return
             }
             val t = obtainTrack(pcm.size)
+            Log.d(TAG, "writePcm gen=$gen: track 已创建 session=${t.audioSessionId} buffer=${t.bufferSizeInFrames} 帧")
             // 注册末尾帧标记：硬件播到最后一帧时回调（真实播放完成）
             t.setPositionNotificationPeriod(pcm.size)   // 周期回调（兜底）
             t.notificationMarkerPosition = pcm.size     // 末尾帧标记
@@ -178,18 +193,33 @@ class TtsAudioPlayer {
                     if (isCurrent(gen)) notifyComplete()
                 }
                 override fun onPeriodicNotification(track: AudioTrack?) {
-                    // 周期回调：核对播放头是否已到末尾（兜底）
+                    // 周期回调：核对播放头是否已到末尾（兜底）。
+                    // totalFrames 用本段闭包捕获的 pcm.size（旧实现读共享字段，段间会串）
                     val head = track?.playbackHeadPosition ?: 0
-                    if (totalFrames > 0 && head >= totalFrames && isCurrent(gen)) {
-                        Log.d(TAG, "writePcm gen=$gen: 周期回调 head=$head>=total=$totalFrames，判完成")
+                    if (pcm.size > 0 && head >= pcm.size && isCurrent(gen)) {
+                        Log.d(TAG, "writePcm gen=$gen: 周期回调 head=$head>=total=${pcm.size}，判完成")
                         notifyComplete()
                     }
                 }
             }, mainHandler)
             // write 全程可被 pause/flush（从 stop 线程）解除阻塞；写完逐段比对令牌
             Log.d(TAG, "writePcm gen=$gen: 开始 write ${pcm.size} 样本")
-            t.write(pcm, 0, pcm.size)
-            Log.d(TAG, "writePcm gen=$gen: write 完成，thread=${Thread.currentThread().name}")
+            val written = t.write(pcm, 0, pcm.size)
+            when {
+                written == pcm.size ->
+                    Log.d(TAG, "writePcm gen=$gen: write 完成（全写 $written 样本），thread=${Thread.currentThread().name}")
+                written >= 0 -> {
+                    // 短写：被并发 pause/flush 提前解除（stop/新段）或底层异常，剩余样本
+                    // 不会播放、末尾 marker（pcm.size）永不到达 → 按失败处理复位状态。
+                    // 记录实际写入数，避免"无声"与正常播放日志不可区分。
+                    Log.w(TAG, "writePcm gen=$gen: 短写！written=$written / size=${pcm.size}（剩余被丢弃，按失败完成）")
+                    if (isCurrent(gen)) notifyComplete()
+                }
+                else -> {
+                    Log.e(TAG, "writePcm gen=$gen: write 返回错误码 $written")
+                    if (isCurrent(gen)) notifyComplete()
+                }
+            }
         } catch (e: InterruptedException) {
             // 被 stop/release 打断：正常路径，不回调完成
             Log.d(TAG, "writePcm gen=$gen: 被 InterruptedException 打断（正常 stop）")
@@ -213,6 +243,9 @@ class TtsAudioPlayer {
      * **不再复用旧 track**：被 stop 打断过的 track 可能已被旧写线程并发操作过、
      * 状态不可信；每段新建一个干净 track 能彻底杜绝"两线程同写一个 track"的竞态。
      * 建 track 成本（约几百 μs~ms）相比整段合成耗时可忽略。
+     *
+     * 调用前提：playLock 已串行化段调度，正常路径下旧写线程已退出；
+     * 兜底 release 仅兜底 join 超时等异常残留。
      */
     private fun obtainTrack(minSamples: Int): AudioTrack {
         val minBuf = AudioTrack.getMinBufferSize(
@@ -221,7 +254,6 @@ class TtsAudioPlayer {
             AudioFormat.ENCODING_PCM_16BIT
         )
         val bufSize = maxOf(minBuf, minSamples * 2)
-        totalFrames = minSamples
         synchronized(trackLock) {
             // 上一段残留（正常路径 stopInternal 已清空；这里兜底再放一次）
             track?.let {

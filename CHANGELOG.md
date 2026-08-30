@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **[#15](https://github.com/llz121517/mea-pet-mobile/issues/15)** TTS 功能在部分骁龙 Soc 上触发 SIGILL 崩溃的问题
+- **TTS 偶发无声（段调度竞态）** — `TtsAudioPlayer` 的 `play`/`stop` 原非原子：两个 speak 并发（主界面 + 悬浮窗、或连发消息）时，新段的 `stopInternal` 会把正在写入的旧段 track `pause/flush` 造成短写（剩余音频被丢弃）；代际交错时 `obtainTrack` 的兜底 release 还可能误杀他段新 track；旧消息的合成协程也会因 `cancel()` 挡不住 ONNX native 推理而在完成后盖过新消息（最新回复无声）。现以 `playLock` 把"停旧段 → 取新号 → 启新线程"串行化；`TtsManager` 增加 speak 序号校验，过期协程在合成完成后自行丢弃本段。
+- **短写导致的状态卡死与不可观测** — `AudioTrack.write()` 返回值此前被忽略：阻塞写被并发 `pause/flush` 提前解除时会短写返回，剩余样本被丢弃、末尾 marker 永不到达 → `isPlaying` 卡 true。现按全写/短写/错误码三分支记录日志，短写与错误码路径立即复位播放状态；短写事件自此在日志中直接可见（W 级「短写！」），无声问题不再与正常播放不可区分。
+- **native 崩溃日志导出 protobuf 字节损坏** — `LogExporter` 原用字符流写出 tombstone protobuf，≥0x80 的字节被替换为 U+FFFD，导出日志解出的 pid/tid 全是垃圾值。改为二进制流直写，并新增 `tools/decode_tombstone.py` 解码工具与 `LogExporterTest` 回归单测（检测 U+FFFD 损坏特征）。
+- **语音设置界面显示修正** — 移除未使用的 viewModel 导入；修正语音模型就绪状态描述文案；模型下载大小信息由 92MB 更新为 72MB（原生库已随 APK 打包，不再计入下载）。
 
 ### Notes
 
