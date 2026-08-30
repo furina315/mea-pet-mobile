@@ -57,3 +57,6 @@ mdi/lock-open-variant-outline   ic_overlay_unlock
 # ── 悬浮窗输入框（OverlayInputWindow）──
 mdi/send                        ic_send
 mdi/drag-vertical               ic_drag
+
+# ── 参数说明帮助图标（ProviderSettings）──
+mdi/help-circle-outline         ic_help_outline
