@@ -10,14 +10,14 @@ import com.meapet.mobile.client.exception.ApiException
  * - 所有 API 返回原始 JSON 字符串或二进制字节数组，由调用方自行解析；
  * - HTTP 引擎通过 [HttpClientEngine] 抽象注入，默认使用 Ktor CIO；
  * - 所有公开方法均为 `suspend`，原生协程支持；
- * - 用户在设置里填的是 **API 根**（通常以 `/v1` 结尾），客户端只自动补齐后面的请求路径
- *   （`/chat/completions`、`/models` 等）。
+ * - 用户在设置里填的是 **完整 API 根**（含版本路径，如 `/v1`、`/v4`），客户端只补齐后面的请求路径
+ *   （`/chat/completions`、`/models` 等），**不会**自动附加任何版本号。
  *
- * 例如填 `https://api.openai.com/v1` → 实际请求 `https://api.openai.com/v1/chat/completions`。
- * 若用户只填了 `https://api.openai.com`，也会自动补上 `/v1` 再拼后续路径。
+ * 例如填 `https://api.openai.com/v1` → 实际请求 `https://api.openai.com/v1/chat/completions`；
+ * 填 `https://open.bigmodel.cn/api/paas/v4` → 实际请求 `https://open.bigmodel.cn/api/paas/v4/chat/completions`。
  *
  * @param apiKey API 密钥
- * @param baseUrl API 根地址，例如 `https://api.openai.com/v1`
+ * @param baseUrl 完整 API 根地址，例如 `https://api.openai.com/v1`
  * @param engine HTTP 引擎，单元测试可注入 Fake 实现
  */
 class OpenAiCompatibleClient(
@@ -27,13 +27,13 @@ class OpenAiCompatibleClient(
 ) {
 
     /**
-     * 规范化后的 API 根（**一定以 `/v1` 结尾**，无尾部 `/`）：
+     * 规范化后的 API 根（无尾部 `/`）：
      * - 去空白、去尾部 `/`
-     * - 若末尾还不是 `/v1`，自动补上
+     * - 版本路径由用户填写，原样保留
      */
     private val baseUrl: String = normalizeBaseUrl(baseUrl)
 
-    /** `GET .../models`（完整路径为 `{base}/models`，base 已含 `/v1`） */
+    /** `GET .../models`（完整路径为 `{base}/models`） */
     suspend fun listModels(): String {
         val request = HttpRequest(
             method = HttpMethod.GET,
@@ -77,9 +77,9 @@ class OpenAiCompatibleClient(
     }
 
     /**
-     * 在已含 `/v1` 的基址后补齐请求路径。
+     * 在 API 根之后补齐请求路径。
      *
-     * @param path `/v1` 之后的路径，例如 `"chat/completions"` / `"models"`
+     * @param path API 根之后的路径，例如 `"chat/completions"` / `"models"`
      */
     private fun apiUrl(path: String): String {
         val cleaned = path.trim().trimStart('/')
@@ -89,19 +89,14 @@ class OpenAiCompatibleClient(
 
     companion object {
         /**
-         * 把用户填写的地址规范成 API 根：`.../v1`。
+         * 把用户填写的地址规范成 API 根：去空白、去尾部 `/`，其余原样保留。
          *
-         * - `https://api.openai.com` / `https://api.openai.com/` → `https://api.openai.com/v1`
-         * - `https://api.openai.com/v1` / `https://api.openai.com/v1/` → `https://api.openai.com/v1`
+         * - `https://api.openai.com/v1/` → `https://api.openai.com/v1`
+         * - `https://open.bigmodel.cn/api/paas/v4` → `https://open.bigmodel.cn/api/paas/v4`
          * - `https://proxy.example.com/openai/v1/` → `https://proxy.example.com/openai/v1`
          */
-        internal fun normalizeBaseUrl(raw: String): String {
-            var url = raw.trim().trimEnd('/')
-            if (!url.endsWith("/v1", ignoreCase = true)) {
-                url = "$url/v1"
-            }
-            return url
-        }
+        internal fun normalizeBaseUrl(raw: String): String =
+            raw.trim().trimEnd('/')
     }
 
     /** 关闭底层 HTTP 引擎，释放资源。 */

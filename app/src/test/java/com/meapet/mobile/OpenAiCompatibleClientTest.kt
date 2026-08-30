@@ -35,7 +35,7 @@ class OpenAiCompatibleClientTest {
 
         val client = OpenAiCompatibleClient(
             apiKey = "sk-test",
-            baseUrl = "https://api.openai.com",
+            baseUrl = "https://api.openai.com/v1",
             engine = fakeEngine
         )
 
@@ -58,7 +58,7 @@ class OpenAiCompatibleClientTest {
 
         val client = OpenAiCompatibleClient(
             apiKey = "sk-test",
-            baseUrl = "https://api.openai.com",
+            baseUrl = "https://api.openai.com/v1",
             engine = fakeEngine
         )
 
@@ -148,7 +148,7 @@ class OpenAiCompatibleClientTest {
 
         val client = OpenAiCompatibleClient(
             apiKey = "sk-test",
-            baseUrl = "https://api.openai.com",
+            baseUrl = "https://api.openai.com/v1",
             engine = fakeEngine
         )
 
@@ -182,7 +182,7 @@ class OpenAiCompatibleClientTest {
 
         val client = OpenAiCompatibleClient(
             apiKey = "sk-test",
-            baseUrl = "https://api.openai.com",
+            baseUrl = "https://api.openai.com/v1",
             engine = fakeEngine
         )
 
@@ -211,7 +211,7 @@ class OpenAiCompatibleClientTest {
 
         val client = OpenAiCompatibleClient(
             apiKey = "sk-test",
-            baseUrl = "https://api.openai.com",
+            baseUrl = "https://api.openai.com/v1",
             engine = fakeEngine
         )
 
@@ -225,7 +225,7 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
-    fun baseUrlWithTrailingSlashIsNormalized() = runTest {
+    fun baseUrlTrailingSlashIsTrimmed() = runTest {
         val fakeEngine = FakeHttpClientEngine { request ->
             assertEquals("https://api.openai.com/v1/models", request.url)
             HttpResponse(200, "{}".encodeToByteArray(), "application/json")
@@ -240,10 +240,10 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
-    fun baseUrlMissingV1GetsItAppendedThenPath() = runTest {
-        // 用户只填主机时，也自动补 /v1 再拼后续
+    fun hostOnlyBaseUrlAppendsEndpointDirectly() = runTest {
+        // 用户只填主机时，不自动补任何版本号，直接在后面拼请求路径
         val fakeEngine = FakeHttpClientEngine { request ->
-            assertEquals("https://api.openai.com/v1/chat/completions", request.url)
+            assertEquals("https://api.openai.com/chat/completions", request.url)
             HttpResponse(200, "{}".encodeToByteArray(), "application/json")
         }
         OpenAiCompatibleClient(
@@ -259,15 +259,15 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
-    fun baseUrlWithV1OnlyAppendsEndpoint() = runTest {
-        // 用户填 https://.../v1 ，后面只补请求路径
+    fun baseUrlIsUsedVerbatimAndEndpointAppended() = runTest {
+        // 版本路径是用户地址的一部分，原样保留后再补请求路径
         val cases = listOf(
             "https://api.openai.com/v1" to "https://api.openai.com/v1/models",
             "https://api.openai.com/v1/" to "https://api.openai.com/v1/models",
             "https://example.com/openai/v1" to "https://example.com/openai/v1/models",
-            "https://example.com/openai/v1/" to "https://example.com/openai/v1/models",
-            "https://proxy.example.com" to "https://proxy.example.com/v1/models",
-            "https://proxy.example.com/" to "https://proxy.example.com/v1/models"
+            "https://open.bigmodel.cn/api/paas/v4" to "https://open.bigmodel.cn/api/paas/v4/models",
+            "https://proxy.example.com" to "https://proxy.example.com/models",
+            "https://proxy.example.com/" to "https://proxy.example.com/models"
         )
         for ((input, expected) in cases) {
             val fakeEngine = FakeHttpClientEngine { request ->
@@ -283,23 +283,24 @@ class OpenAiCompatibleClientTest {
     }
 
     @Test
-    fun normalizeBaseUrlEnsuresTrailingV1() {
+    fun normalizeBaseUrlOnlyTrimsAndPreservesVersion() {
         assertEquals(
             "https://api.openai.com/v1",
             OpenAiCompatibleClient.normalizeBaseUrl("https://api.openai.com/v1/")
         )
+        // 不自动补 /v1
         assertEquals(
-            "https://api.openai.com/v1",
+            "https://api.openai.com",
             OpenAiCompatibleClient.normalizeBaseUrl("https://api.openai.com")
         )
         assertEquals(
             "https://gateway.example.com/openai/v1",
             OpenAiCompatibleClient.normalizeBaseUrl("https://gateway.example.com/openai/v1")
         )
-        // 中间的 /v1 路径段保留，并在末尾再保证 /v1
+        // v4 等其它版本路径原样保留
         assertEquals(
-            "https://gateway.example.com/v1/proxy/v1",
-            OpenAiCompatibleClient.normalizeBaseUrl("https://gateway.example.com/v1/proxy/")
+            "https://open.bigmodel.cn/api/paas/v4",
+            OpenAiCompatibleClient.normalizeBaseUrl("https://open.bigmodel.cn/api/paas/v4/")
         )
     }
 

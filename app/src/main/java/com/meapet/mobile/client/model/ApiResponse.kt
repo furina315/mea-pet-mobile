@@ -22,7 +22,7 @@ object ApiResponse {
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
-     * 从 `/v1/chat/completions` 响应中提取首个 choice 的 `message.content`。
+     * 从 `/chat/completions` 响应中提取首个 choice 的 `message.content`。
      *
      * @return 消息文本；`choices` 为空、content 缺失或结构不符时返回 null
      */
@@ -35,7 +35,7 @@ object ApiResponse {
     }
 
     /**
-     * 从 `/v1/models` 响应中提取模型 id 列表。
+     * 从 `/models` 响应中提取模型 id 列表。
      *
      * 兼容常见 OpenAI 兼容网关：优先读 `data[].id`；若顶层是数组则直接读每项 `id`。
      * 结果去重、去空、按字母序排序。

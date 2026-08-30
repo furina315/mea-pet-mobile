@@ -87,7 +87,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 | 字段 | 说明 |
 |------|------|
 | **API Key** | API 密钥。**可留空**——本地模型（Ollama / LM Studio 等）无需鉴权；云端服务缺 Key 会在请求时提示填写 |
-| **API 地址** | OpenAI 兼容的 API 基础 URL（可带或不带 `/v1`，客户端会自动规范化） |
+| **API 地址** | OpenAI 兼容的 API 基础 URL（含版本路径，如 `/v1`、`/v4`；地址原样使用，不自动附加版本号） |
 
 **模型参数**：
 

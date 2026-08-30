@@ -30,7 +30,7 @@ import kotlinx.coroutines.withContext
  * 设置界面 ViewModel。
  *
  * @property apiKey API Key
- * @property apiUrl API 根地址（通常以 `/v1` 结尾）
+ * @property apiUrl 完整 API 根地址（含版本路径，如 `/v1`、`/v4`）
  * @property model 模型名
  * @property availableModels 从 API 拉取的模型 id 列表
  * @property isLoadingModels 是否正在拉取模型列表
@@ -380,7 +380,7 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
      * 用当前表单里的 Key / URL 拉取模型列表。
      *
      * 会先把 Key、URL 落盘并重建客户端（与后续聊天共用同一配置），
-     * 再用临时客户端请求 `/v1/models`，避免依赖 lazy 初始化时机。
+     * 再用临时客户端请求 `{base}/models`，避免依赖 lazy 初始化时机。
      */
     fun fetchModels(apiKey: String, apiUrl: String) {
         // 本地模型（Ollama / LM Studio 等）不需要 API Key，允许留空直接拉取
