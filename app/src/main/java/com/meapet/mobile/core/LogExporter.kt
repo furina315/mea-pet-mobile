@@ -11,6 +11,8 @@ import com.meapet.mobile.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,7 +25,8 @@ import java.util.Locale
  * ## 内容
  * - 设备 / 版本头信息；
  * - **tombstone**：本进程历史 native 崩溃（段错误等）的退出原因与堆栈，
- *   经 [ActivityManager.getHistoricalProcessExitReasons] 读取（API 30+；低版本跳过）；
+ *   经 [ActivityManager.getHistoricalProcessExitReasons] 读取（API 30+；低版本跳过），
+ *   堆栈为 debuggerd 的 protobuf 二进制，按原始字节写入（可用 android.os.tombstone 解码）；
  * - **logcat**：全量缓冲区的应用日志（不限定 PID——TTS 等服务可能跑在独立进程，
  *   且便于看到崩溃前的完整上下文）。
  *
@@ -59,11 +62,12 @@ object LogExporter {
         val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
         val file = File(dir, "meapet-$stamp.log")
 
-        file.bufferedWriter(Charsets.UTF_8).use { writer ->
-            writer.write(header())
-            writer.newLine()
-            writeTombstones(context, writer)
-            writeLogcat(writer)
+        // 二进制流直写：tombstone 是 protobuf 原始字节，经字符流会被 UTF-8 解码破坏
+        file.outputStream().buffered().use { out ->
+            out.writeText(header())
+            out.newLine()
+            writeTombstones(context, out)
+            writeLogcat(out)
         }
         return file
     }
@@ -78,14 +82,26 @@ object LogExporter {
         appendLine("═".repeat(50))
     }
 
+    /** 文本换行符（Android 即 '\n'）。 */
+    private val LF = '\n'.code
+
+    /** 以 UTF-8 写出文本；二进制内容（tombstone protobuf）必须走原始字节，见 [writeTombstoneBytes]。 */
+    private fun OutputStream.writeText(s: String) = write(s.toByteArray(Charsets.UTF_8))
+
+    /** 写一行 UTF-8 文本并换行。 */
+    private fun OutputStream.writeLine(s: String) {
+        writeText(s)
+        write(LF)
+    }
+
+    private fun OutputStream.newLine() = write(LF)
+
     /** 写入本进程历史 native crash 的 tombstone（API 30+）。 */
-    private fun writeTombstones(context: Context, writer: java.io.BufferedWriter) {
-        writer.write("■ Native Crash (tombstone)")
-        writer.newLine()
+    private fun writeTombstones(context: Context, out: OutputStream) {
+        out.writeLine("■ Native Crash (tombstone)")
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            writer.write("（系统版本低于 Android 11，不支持读取历史崩溃记录）")
-            writer.newLine()
-            writer.newLine()
+            out.writeLine("（系统版本低于 Android 11，不支持读取历史崩溃记录）")
+            out.newLine()
             return
         }
         try {
@@ -97,49 +113,42 @@ object LogExporter {
             } ?: emptyList()
 
             if (crashes.isEmpty()) {
-                writer.write("（无 native 崩溃记录）")
-                writer.newLine()
+                out.writeLine("（无 native 崩溃记录）")
             } else {
                 crashes.forEach { info ->
-                    writer.write("── 崩溃于 ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(info.timestamp))} ──")
-                    writer.newLine()
-                    writer.write("进程: ${info.processName}  重要性: ${info.importance}")
-                    writer.newLine()
+                    out.writeLine("── 崩溃于 ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(info.timestamp))} ──")
+                    out.writeLine("进程: ${info.processName}  重要性: ${info.importance}")
                     try {
-                        info.traceInputStream?.bufferedReader()?.use { trace ->
-                            trace.forEachLine { writer.write(it); writer.newLine() }
-                        } ?: run { writer.write("（无堆栈详情）"); writer.newLine() }
+                        info.traceInputStream?.use { trace ->
+                            // tombstone 是 debuggerd 的 protobuf 二进制，必须按原始字节写出：
+                            // 经字符流解码会把 ≥0x80 的字节替换成 U+FFFD（ef bf bd），
+                            // 解出的 pid/tid 全是垃圾值，寄存器与地址全毁。
+                            writeTombstoneBytes(trace, out)
+                            out.newLine()
+                        } ?: run { out.writeLine("（无堆栈详情）") }
                     } catch (e: Exception) {
-                        writer.write("（堆栈读取失败: ${e.message}）")
-                        writer.newLine()
+                        out.writeLine("（堆栈读取失败: ${e.message}）")
                     }
                 }
             }
         } catch (e: Exception) {
-            writer.write("（tombstone 读取失败: ${e.message}）")
-            writer.newLine()
+            out.writeLine("（tombstone 读取失败: ${e.message}）")
         }
-        writer.newLine()
-        writer.write("═".repeat(50))
-        writer.newLine()
+        out.newLine()
+        out.writeLine("═".repeat(50))
     }
 
     /** 写入 logcat 全量缓冲区（不限定 PID，覆盖服务进程与崩溃前上下文）。 */
-    private fun writeLogcat(writer: java.io.BufferedWriter) {
-        writer.write("■ Logcat")
-        writer.newLine()
+    private fun writeLogcat(out: OutputStream) {
+        out.writeLine("■ Logcat")
         try {
             // -d 立即返回（非阻塞）；-v threadtime 带时间戳与线程
             val process = ProcessBuilder("logcat", "-d", "-v", "threadtime")
                 .redirectErrorStream(true).start()
-            process.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { line ->
-                writer.write(line)
-                writer.newLine()
-            }
+            process.inputStream.use { it.copyTo(out) }
             process.waitFor()
         } catch (e: Exception) {
-            writer.write("（logcat 抓取失败: ${e.message}）")
-            writer.newLine()
+            out.writeLine("（logcat 抓取失败: ${e.message}）")
         }
     }
 
@@ -157,4 +166,14 @@ object LogExporter {
         }
         context.startActivity(chooser)
     }
+}
+
+/**
+ * 把 tombstone 的 protobuf 原始字节逐字节拷入 [out]。
+ *
+ * 独立成函数以便单测守住不变式：这些字节绝不可经字符流（Reader/Writer）中转，
+ * 否则 ≥0x80 的字节会被替换为 U+FFFD（ef bf bd），protobuf 报废（见 [LogExporter.writeTombstones]）。
+ */
+internal fun writeTombstoneBytes(raw: InputStream, out: OutputStream) {
+    raw.copyTo(out)
 }
