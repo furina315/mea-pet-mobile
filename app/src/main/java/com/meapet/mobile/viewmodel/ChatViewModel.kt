@@ -79,6 +79,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         //   position 6+（最旧）→ 扣 4 秒（首次扣 2 秒 + 再次扣 2 秒）
         viewModelScope.launch {
             // msgId → (剩余毫秒, 移除Job, 已扣减次数)
+            // 线程约束：lifeMap 无同步，安全性依赖「所有读写都经 viewModelScope.launch
+            // 运行在 Dispatchers.Main.immediate 单线程上」这一前提（collect 协程写、
+            // scheduleRemove 协程删）。若未来把任一访问挪到别的调度器，必须改用
+            // Mutex / actor 保护，否则会并发修改非线程安全 Map。
             val lifeMap = LinkedHashMap<String, Triple<Long, Job, Int>>()
 
             Live2dManager.tapMessageEvent.collect { text ->
@@ -277,13 +281,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             result.fold(
                 onSuccess = { (userMsg, assistantMsg) ->
                     _state.update { current ->
-                        val updated = current.messages
-                            .filterNot { msg ->
-                                msg.id == lastUserMsg.id || (
-                                    msg.isAssistant && current.messages.indexOf(msg) >
-                                        current.messages.indexOfLast { it.id == lastUserMsg.id }
-                                )
-                            }
+                        // 分界一次性定位（原实现 indexOf 套 filterNot 为 O(n²)）：
+                        // 去掉该 user 消息本身，及其之后的所有 assistant 回复
+                        val cutIndex = current.messages.indexOfLast { it.id == lastUserMsg.id }
+                        val updated = current.messages.filterIndexed { index, msg ->
+                            if (index <= cutIndex) msg.id != lastUserMsg.id else !msg.isAssistant
+                        }
                         current.copy(
                             messages = updated + listOf(userMsg, assistantMsg),
                             isLoading = false
@@ -312,7 +315,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         sendJob = null
         chatService.clearHistory()
         _state.update {
-            ChatUiState(memoryContextInfo = "对话已清除")
+            // 只清对话相关字段，保留 updateNotice / memoryDialog 等无关状态
+            it.copy(
+                messages = emptyList(),
+                isLoading = false,
+                error = null,
+                inputText = "",
+                memoryContextInfo = "对话已清除"
+            )
         }
     }
 

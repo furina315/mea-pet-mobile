@@ -1,6 +1,8 @@
 package com.meapet.mobile.client.model
 
+import android.util.Log
 import com.meapet.mobile.core.runCatchingLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -51,7 +53,11 @@ object ApiResponse {
             (element as? JsonObject)?.get("id")?.jsonPrimitive?.contentOrNull?.trim()
                 ?.takeIf { it.isNotEmpty() }
         }.distinct().sorted()
-    } catch (_: Exception) {
+    } catch (e: CancellationException) {
+        // 取消一律重抛（见 ErrorHandling.kt 约定），不能吞
+        throw e
+    } catch (e: Exception) {
+        Log.w(TAG, "Failed to parse model ids: ${e.message}")
         emptyList()
     }
 }

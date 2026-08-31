@@ -187,14 +187,22 @@ class ConversationManager(
      */
     private fun trimWindow() {
         if (messages.size <= maxSize) return
-        val systemMessages = messages.filter { it.role == ChatRole.system }
-        val nonSystem = messages.filter { it.role != ChatRole.system }
-        val budget = (maxSize - systemMessages.size - trimBatch).coerceAtLeast(1)
-        val excess = nonSystem.size - budget
+        val systemCount = messages.count { it.role == ChatRole.system }
+        val nonSystemCount = messages.size - systemCount
+        val budget = (maxSize - systemCount - trimBatch).coerceAtLeast(1)
+        val excess = nonSystemCount - budget
         if (excess > 0) {
-            val trimmed = nonSystem.drop(excess)
-            messages.clear()
-            messages.addAll(systemMessages + trimmed)
+            // 就地从头部逐条裁掉最旧的 excess 条非 system 消息。
+            // 不能用「system 提前 + 尾部拼接」重建：会把 system 消息整体挪到最前，
+            // 打乱与 user/assistant 的原始交错顺序。
+            var toRemove = excess
+            val iterator = messages.iterator()
+            while (toRemove > 0 && iterator.hasNext()) {
+                if (iterator.next().role != ChatRole.system) {
+                    iterator.remove()
+                    toRemove--
+                }
+            }
             Log.d(TAG, "Window trimmed: removed $excess messages (batch=$trimBatch)")
         }
     }

@@ -12,6 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]（版本号待定）
+
+### Fixed
+
+- **清空对话误清更新提示与记忆弹窗（#4）** — `clearConversation` 原用 `ChatUiState(...)` 整体重建状态，清空对话会顺带关掉正在显示的更新提示（`updateNotice`）与记忆查看弹窗（`memoryDialog`）。改为 `copy(...)` 仅重置对话相关字段（`messages`/`isLoading`/`error`/`inputText`/`memoryContextInfo`），其余状态保留。
+- **会话持久化在作用域取消后静默丢数据（#7）** — `ConversationStore.persistAsync` 的落盘 collector 由传入 `scope` 驱动，scope 一旦取消 collector 即结束，之后所有 `persistAsync` 只往 `MutableSharedFlow` emit、无人消费，会话快照静默丢失且无任何痕迹。现保留 collector 的 `Job` 引用，`persistAsync` 前检测 `isActive`，已取消时记 `Log.w` 告警暴露问题。
+- **滑动窗口裁剪打乱消息原始顺序（#3）** — `ConversationManager.trimWindow` 原用「system 整体提前 + 非 system 尾部拼接」重建列表，把 system 消息全部挪到最前，打乱与 user/assistant 的交错顺序。改为就地迭代器从头部逐条裁掉最旧的超额非 system 消息，保留原始交错顺序。
+- **Markwon 缓存键不含全部构造参数（#5）** — `MarkdownText` 的 `markwonCache` 键仅 `dark: Boolean`，但 `textSizePx` 参与构造；系统字体缩放/显示密度变化时同 dark 命中旧实例，公式字号错乱。缓存键改为含全部构造参数的 `MarkwonKey(dark, textSizePx, tableBorder)`，调用处 `remember` 键同步。
+- **modelIds 吞 CancellationException（#2 / #46）** — `ApiResponse.modelIds` 原用裸 `catch (_: Exception)`，违反项目 `ErrorHandling.kt` 的取消重抛约定。现前置 `catch (e: CancellationException) { throw e }`，普通异常记 `Log.w` 后返回空列表，与同文件 `chatCompletionContent` 的 `runCatchingLog` 风格统一。
+
+### Performance
+
+- **Markdown 解析结果缓存（#39）** — `MarkdownText` 原在 `update` 阶段每次重组都 `setMarkdown` 重新解析；现 `remember(markwon, safe) { toMarkdown(safe) }` 缓存解析结果 Spanned，主题/气泡透明度变化只改色不再触发昂贵的 Markdown 重解析（流式期间 `safe` 每帧变仍逐帧解析）。
+- **retryLastMessage 过滤 O(n²) → O(n)（#40）** — 原 `filterNot` 内对每条消息 `indexOf`，整体 O(n²)；现一次性 `indexOfLast` 定位分界后 `filterIndexed` 单趟过滤。
+
+### Notes
+
+- 本次修复对应 `code-review-triage.md` 的 P0 全部 5 项（#3/#4/#5/#7 + #2/#46），并顺手修复 #39/#40、为 #1 的 `lifeMap` 补充线程约束注释（说明其安全性依赖 `Dispatchers.Main.immediate` 单线程前提）。P1 稳定性（ANR 风险）与架构重构另行排期。
+
+---
+
 ## [1.7.1] - 2026-08-31
 
 ### Added

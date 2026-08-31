@@ -78,15 +78,21 @@ internal fun normalizeLatexDelimiters(src: String): String {
 }
 
 /**
+ * Markwon 缓存键。参与构造的全部参数都必须进键，否则同 dark 不同参数
+ * （如系统字体缩放导致 textSizePx 变化）会命中旧实例、公式字号错乱。
+ * 颜色不进键：文本/代码背景在 TextView 层逐帧设置，跟随主题与气泡透明度。
+ */
+private data class MarkwonKey(val dark: Boolean, val textSizePx: Float, val tableBorder: Int)
+
+/**
  * Markdown 渲染工厂。
  *
- * Markwon 实例按暗色模式缓存两份（公式字体等插件初始化开销较大，避免逐条消息重建）。
- * 颜色不进缓存键：文本/代码背景在 TextView 层逐帧设置，跟随主题与气泡透明度。
+ * Markwon 实例按 [MarkwonKey] 缓存（公式字体等插件初始化开销较大，避免逐条消息重建）。
  */
-private val markwonCache = ConcurrentHashMap<Boolean, Markwon>()
+private val markwonCache = ConcurrentHashMap<MarkwonKey, Markwon>()
 
 private fun obtainMarkwon(context: Context, dark: Boolean, textSizePx: Float, tableBorder: Int): Markwon =
-    markwonCache.getOrPut(dark) {
+    markwonCache.getOrPut(MarkwonKey(dark, textSizePx, tableBorder)) {
         Markwon.builder(context)
             .usePlugin(CorePlugin.create())
             // 行内解析器：JLatexMathPlugin 的行内公式处理器需注册到它上面
@@ -146,13 +152,17 @@ fun MarkdownText(
     val tableBorder = if (dark) 0xFF49454F.toInt() else 0xFFCAC4D0.toInt()
     // 首次渲染前初始化 LaTeX 符号表（幂等）
     remember { ensureLatexInit(context); true }
-    val markwon = remember(dark) { obtainMarkwon(context, dark, textSizePx, tableBorder) }
+    val markwon = remember(dark, textSizePx, tableBorder) { obtainMarkwon(context, dark, textSizePx, tableBorder) }
 
     // 渲染前处理：定界符归一化 + 流式中未闭合代码围栏补全
     val safe = remember(markdown, isStreaming) {
         val normalized = normalizeLatexDelimiters(markdown)
         if (isStreaming) closeUnclosedFences(normalized) else normalized
     }
+
+    // 解析结果按 (markwon, safe) 缓存：主题/气泡透明度变化只走 update 改色，
+    // 不再触发昂贵的 Markdown 重新解析（流式期间 safe 每帧变，仍会逐帧解析）
+    val parsed = remember(markwon, safe) { markwon.toMarkdown(safe) }
 
     // 代码块背景：主题基准色叠加气泡透明度（Markwon CodeBlockSpan 取 hint color）
     val codeBgBase = if (dark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.07f)
@@ -178,7 +188,7 @@ fun MarkdownText(
             tv.setTextColor(color.copy(alpha = alpha).toArgb())
             tv.setHintTextColor(codeBg.toArgb())
             tv.setLinkTextColor(ColorStateList.valueOf(color.copy(alpha = alpha).toArgb()))
-            markwon.setMarkdown(tv, safe)
+            markwon.setParsedMarkdown(tv, parsed)
         }
     )
 }
