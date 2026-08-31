@@ -12,16 +12,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.7.1] - 2026-08-30
+## [1.7.1] - 2026-08-31
 
 ### Added
 
 - **Temperature 参数说明气泡** — 「提供商」子页 Temperature 滑杆标签旁新增问号图标，点击弹出 RichTooltip：讲解参数作用、桌宠场景建议取值（闲聊 0.8~1.2、严格听指令降到 0.3 以下），及「设为 0 不保证输出一致 / 部分提供商上限 1.0 / 推理模型忽略此参数」三条注意事项；气泡带「知道了」按钮，返回键先关气泡再翻页。新增通用组件 `ParamLabelWithHelp`（`SettingsCommon.kt`，参数标签 + 说明气泡），其余参数滑杆可直接复用；新图标 `ic_help_outline`（MDI help-circle-outline，Apache 2.0，516 字节），经 `tools/svg2vd.py` 生成，清单同步至 `tools/icons.txt`。
+- **友盟统计 SDK 构建门控** — `umeng.enabled=false`（local.properties，或命令行 `-Pumeng.enabled=false`）时 SDK 不打包进 APK（依赖退化为 compileOnly，仅保留编译期符号）；统计接入代码（预初始化/正式初始化）、首启隐私弹窗与关于页授权管理经 `BuildConfig.UMENG_ENABLED` 全部失效，关于页统计数据采集卡片显示「该构建未包含统计 SDK，不会采集任何数据」，隐私政策正文同步适配为无 SDK 文案。默认 `true`，行为与既往构建一致。
 
 ### Changed
 
 - **API 地址不再自动补 `/v1`** — 移除 baseUrl 末尾自动拼接 `/v1` 的规范化逻辑，用户填写的地址（含版本路径）原样保留后拼请求路径（如智谱清言 `https://open.bigmodel.cn/api/paas/v4`）；为版本号继续演进的端点留余地。
 - **ONNX Runtime 升 1.24.3 且原生库随 APK 打包** — 1.23.2 在部分骁龙 Soc 上 CPU provider 的 KleidiAI SME MatMul 路径触发 SIGILL 崩溃（[onnxruntime#26921](https://github.com/microsoft/onnxruntime/issues/26921)），升 1.24.3 修复。`libonnxruntime.so` 由「运行时按需下载」改为随 APK 打包（`abiFilters` 仅保留 arm64-v8a / armeabi-v7a，APK 增大约 44MB）；4 个 ONNX 模型仍按需下载 / 本地 zip 导入，TTS 资源包不再携带 so（导入旧资源包时多余 so 自动跳过）。老版本下载到 `filesDir/tts_model/lib/` 的残留原生库启动后异步清理。
+- **隐私政策修订至 1.2（2026-08-31 更新）** — 按构建是否包含统计 SDK 拆分为**两版独立全文**（含 SDK 版说明友盟采集范围、授权管理与数据安全；无 SDK 版声明不采集任何数据），两份政策在同一文件分开维护、共享同一套版本号/日期；修正预初始化描述（该阶段仅完成 SDK 初始化准备，不采集、不上报数据，正式采集仅在用户同意后进行）。版本号与生效/更新日期由 `local.properties` 改为**代码硬编码**（`PrivacyPolicyContent.kt` 的 `PRIVACY_POLICY_*` 常量）——修订政策必改代码文案，版本号随代码一并提交，避免配置漏改导致老用户不重新确认。
+- **关于页应用简介副标题更换** — 由「借助 Claude Code CLI，由 DeepSeek V4 Flash 强力赋能辅助开发」改为「Say my name when a tree susurrates / Once and again telling a story lost in time」。
 
 ### Fixed
 - **[#15](https://github.com/llz121517/mea-pet-mobile/issues/15)** TTS 功能在部分骁龙 Soc 上触发 SIGILL 崩溃的问题

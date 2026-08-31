@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 友盟+ 统计 SDK 所需权限 -->
+    <!-- 友盟+ 统计 SDK 所需权限（umeng.enabled=false 的无 SDK 构建时无害，保留） -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Required for floating overlay window -->

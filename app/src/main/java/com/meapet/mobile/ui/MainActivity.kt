@@ -26,7 +26,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.meapet.mobile.core.AppInfo
+import com.meapet.mobile.BuildConfig
 import com.meapet.mobile.core.PrivacyConsentManager
 import com.meapet.mobile.core.isDarkTheme
 import com.meapet.mobile.app.AppContainer
@@ -36,6 +36,7 @@ import com.meapet.mobile.live2d.Live2dRenderState
 import com.meapet.mobile.live2d.Live2dRenderer
 import com.meapet.mobile.live2d.overlay.FloatingLive2dService
 import com.meapet.mobile.ui.component.AutoUpdateOptInDialog
+import com.meapet.mobile.ui.component.PRIVACY_POLICY_VERSION
 import com.meapet.mobile.ui.screen.ChatScreenContent
 import com.meapet.mobile.ui.theme.MeaPetTheme
 import kotlinx.coroutines.launch
@@ -153,7 +154,7 @@ class MainActivity : ComponentActivity() {
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val scope = rememberCoroutineScope()
                 val settingsManager = container.settingsManager
-                val currentPrivacyVersion = AppInfo.privacyVersion
+                val currentPrivacyVersion = PRIVACY_POLICY_VERSION
 
                 var showPrivacyDialog by remember { mutableStateOf(false) }
                 var showUpdateOptInDialog by remember { mutableStateOf(false) }
@@ -162,14 +163,20 @@ class MainActivity : ComponentActivity() {
                 // 启动判定（首帧后异步执行，不阻塞渲染）：
                 // - 首次启动（first_launch）：先落 first_launch=false，再弹隐私政策 + 检查更新。
                 // - 非首次但隐私版本号变化：弹隐私政策，副标题提示「隐私政策更新」。
+                // - 隐私弹窗仅用于友盟统计采集授权：无统计 SDK 的构建（umeng.enabled=false）
+                //   无采集可言，弹窗失效——且**不记录已看版本号**，未来换回含 SDK 的构建时
+                //   版本不匹配会重新弹窗（若在此记录，同版本下换回 SDK 构建不再弹、授权又默认
+                //   未同意 → 统计永远不会初始化）。检查更新弹窗与统计无关，照常。
                 LaunchedEffect(Unit) {
                     val firstLaunch = settingsManager.isFirstLaunch()
                     if (firstLaunch) {
                         settingsManager.markFirstLaunchDone()
-                        settingsManager.setPrivacyVersionShown(currentPrivacyVersion)
-                        showPrivacyDialog = true
                         showUpdateOptInDialog = true
-                    } else if (settingsManager.getPrivacyVersionShown() != currentPrivacyVersion) {
+                        if (BuildConfig.UMENG_ENABLED) {
+                            settingsManager.setPrivacyVersionShown(currentPrivacyVersion)
+                            showPrivacyDialog = true
+                        }
+                    } else if (BuildConfig.UMENG_ENABLED && settingsManager.getPrivacyVersionShown() != currentPrivacyVersion) {
                         privacyIsUpdate = true
                         showPrivacyDialog = true
                     }

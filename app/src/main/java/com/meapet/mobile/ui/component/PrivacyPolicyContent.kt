@@ -10,16 +10,42 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.meapet.mobile.BuildConfig
 import com.meapet.mobile.core.AppInfo
+
+// ═══════════════════════════════════════════════════
+//  隐私政策版本与日期（两份政策共享同一套）
+// ═══════════════════════════════════════════════════
+// 硬编码在此而非 local.properties：修订政策必然改动本文件文案，版本号/日期随代码一起
+// 提交，避免放配置里时漏改。修订时必须同时递增版本号并更新日期（与 MainActivity 的
+// 版本比对逻辑配合：版本号变化 → 老用户重新弹窗确认）。
+const val PRIVACY_POLICY_VERSION = "1.2"
+const val PRIVACY_POLICY_EFFECTIVE_DATE = "2026-07-29"
+const val PRIVACY_POLICY_UPDATE_DATE = "2026-08-31"
 
 /**
  * 共享的隐私政策正文内容（纯内容，不含任何外壳组件）。
  *
- * 供 [PrivacyDialog] 和设置页的隐私政策子页复用，
- * 确保两处文案一致且由同一模块维护。
+ * 供 [PrivacyDialog] 和设置页的隐私政策子页复用，确保两处文案一致且由同一模块维护。
+ *
+ * ## 两份政策分开维护（同一文件）
+ * 按构建是否包含统计 SDK（[BuildConfig.UMENG_ENABLED]）分派到两套完整政策：
+ * - [PrivacyPolicyWithUmeng]：集成友盟+ 统计 SDK 的构建，说明采集范围、授权管理与数据安全；
+ * - [PrivacyPolicyWithoutSdk]：无统计 SDK 的构建，声明不采集任何数据。
+ * 两份政策各自成篇、章节独立编号，修订时分别维护；版本号/日期由上方共享常量统一提供。
  */
 @Composable
 fun PrivacyPolicyContent() {
+    if (BuildConfig.UMENG_ENABLED) {
+        PrivacyPolicyWithUmeng()
+    } else {
+        PrivacyPolicyWithoutSdk()
+    }
+}
+
+/** 含友盟+ 统计 SDK 构建的隐私政策全文（与无 SDK 版分开维护）。 */
+@Composable
+private fun PrivacyPolicyWithUmeng() {
     PrivacyHeader()
 
     PrivacySection("一、概述") {
@@ -74,7 +100,7 @@ fun PrivacyPolicyContent() {
     PrivacySection("五、授权管理") {
         PrivacyBullet("首次启动时，你可以在弹窗中选择同意或不同意数据采集")
         PrivacyBullet("不同意：App 正常使用，但不会初始化统计 SDK，不采集任何统计数据")
-        PrivacyBullet("为满足合规要求，应用每次启动会进行统计 SDK 的预初始化（不采集、不上报数据）")
+        PrivacyBullet("应用每次启动会进行统计 SDK 的预初始化（该阶段仅完成 SDK 初始化准备，不采集、不上报任何数据）；正式初始化并开始采集，仅在您同意后进行")
         PrivacyBullet("同意后可随时在「设置」中取消授权。为确保撤回后立即、彻底停止数据采集，取消授权后 App 将自动退出；重新打开即可正常使用，且不会再进行任何统计采集")
     }
 
@@ -101,8 +127,39 @@ fun PrivacyPolicyContent() {
     }
 }
 
+/** 无统计 SDK 构建的隐私政策全文（与含 SDK 版分开维护）。 */
+@Composable
+private fun PrivacyPolicyWithoutSdk() {
+    PrivacyHeader()
+
+    PrivacySection("一、概述") {
+        Text(
+            "本隐私政策由 ${AppInfo.devName}（下称「开发者」）制定并生效，适用于 MeaPet（梅尔桌宠）应用。本构建未包含任何统计 SDK，应用不采集任何使用数据。本隐私政策说明应用的数据处理情况与你的权利。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    PrivacySection("二、数据处理") {
+        PrivacyBullet("本构建未包含统计 SDK，应用不采集、不上报任何使用数据")
+        PrivacyBullet("你的聊天、记忆与设置等数据仅存储于本机，不会上传")
+    }
+
+    PrivacySection("三、你的权利") {
+        PrivacyBullet("你可以随时清除应用数据，以删除本地保存的配置与记录")
+    }
+
+    PrivacySection("四、联系我们") {
+        Text(
+            "本隐私政策主体为 ${AppInfo.devName}。如有任何关于隐私与数据处理的疑问，可通过 GitHub 仓库（${AppInfo.gitRepoUrl}）Issues 联系开发者。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 /**
- * 隐私政策头部：版本、生效时间与修订时间。
+ * 隐私政策头部：版本、生效时间与修订时间（两份政策共享 [PRIVACY_POLICY_VERSION] 等常量）。
  */
 @Composable
 private fun PrivacyHeader() {
@@ -110,17 +167,17 @@ private fun PrivacyHeader() {
         modifier = Modifier.padding(bottom = 8.dp)
     ) {
         Text(
-            "版本：${AppInfo.privacyVersion}",
+            "版本：${PRIVACY_POLICY_VERSION}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "生效时间：${AppInfo.privacyEffectiveDate}",
+            "生效时间：${PRIVACY_POLICY_EFFECTIVE_DATE}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "修订时间：${AppInfo.privacyUpdateDate}",
+            "修订时间：${PRIVACY_POLICY_UPDATE_DATE}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

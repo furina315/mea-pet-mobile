@@ -21,6 +21,9 @@ import com.umeng.commonsdk.UMConfigure
  *   不采集设备信息、不上报数据，满足工信部合规要求。
  * - **正式初始化**（[UMConfigure.init]）：仅在用户同意《隐私政策》后调用，
  *   SDK 才真正采集并上报。未同意时 App 其余功能不受影响。
+ * - **构建门控**：`BuildConfig.UMENG_ENABLED` 为 false 的构建（gradle
+ *   `umeng.enabled=false`）不打包 SDK，跳过全部统计初始化；此时首启隐私弹窗
+ *   与关于页授权管理也相应失效（见 MainActivity / AboutSettings）。
  *
  * ## 配置
  * 在 `AndroidManifest.xml` 中声明：
@@ -38,14 +41,26 @@ class MeaPetApplication : Application() {
         super.onCreate()
         Log.i(TAG, "MeaPetApplication onCreate")
 
-        // ── 友盟+ 预初始化（不采集、不上报，合规要求务必在 onCreate 调用） ──
-        val appKey = BuildConfig.UMENG_APP_KEY
-        val isDebug = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        UMConfigure.setLogEnabled(isDebug)
-        if (appKey.isNotBlank()) {
-            UMConfigure.preInit(this, appKey, UMENG_CHANNEL)
+        // ── 友盟+ 统计 ──
+        // umeng.enabled=false 的构建不打包 SDK：跳过预初始化与正式初始化，
+        // 首启隐私弹窗与关于页授权管理在各自位置按同一开关失效。
+        if (!BuildConfig.UMENG_ENABLED) {
+            Log.i(TAG, "本构建未包含友盟统计 SDK（umeng.enabled=false），跳过统计初始化")
         } else {
-            Log.w(TAG, "友盟 AppKey 为空（local.properties 中未配置 umeng.appKey），跳过预初始化")
+            // 预初始化（不采集、不上报，合规要求务必在 onCreate 调用）
+            val appKey = BuildConfig.UMENG_APP_KEY
+            val isDebug = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            UMConfigure.setLogEnabled(isDebug)
+            if (appKey.isNotBlank()) {
+                UMConfigure.preInit(this, appKey, UMENG_CHANNEL)
+            } else {
+                Log.w(TAG, "友盟 AppKey 为空（local.properties 中未配置 umeng.appKey），跳过预初始化")
+            }
+
+            // 正式初始化（仅在用户已同意隐私协议时调用）
+            if (appKey.isNotBlank() && PrivacyConsentManager.isAgreed(this)) {
+                initUmengSdk()
+            }
         }
 
         // 1) 创建依赖容器
@@ -59,11 +74,6 @@ class MeaPetApplication : Application() {
 
         // 4) 打印启动信息
         Log.i(TAG, "App initialized: config=${container.config}")
-
-        // ── 友盟+ 正式初始化（仅在用户已同意隐私协议时调用） ──
-        if (appKey.isNotBlank() && PrivacyConsentManager.isAgreed(this)) {
-            initUmengSdk()
-        }
     }
 
     /**
@@ -73,6 +83,8 @@ class MeaPetApplication : Application() {
      * 取消授权后不再调用（下次冷启动也不 init），SDK 停止上报。
      */
     fun initUmengSdk() {
+        // 无统计 SDK 的构建：本方法永不生效（MainActivity 同意回调的兜底）
+        if (!BuildConfig.UMENG_ENABLED) return
         val appKey = BuildConfig.UMENG_APP_KEY
         if (appKey.isBlank()) return
         try {
