@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * TTS 门面：开关判断 + 整段合成播放。
@@ -74,6 +75,14 @@ class TtsManager(
     private var currentJob: Job? = null
 
     /**
+     * speak 序号（原子递增）。合成完成后 [play] 前校验自己仍是最新：
+     * `currentJob?.cancel()` 是协作式取消，挡不住正在 ONNX native 推理（无挂起点）的
+     * 旧协程——它会照常走完合成。无此校验时，旧消息的协程可能在合成完成后
+     * 盖过新消息（冲掉新段的播放），表现为"最新回复无声"。
+     */
+    private val speakSeq = AtomicInteger(0)
+
+    /**
      * 朗读一条助手回复。开关关闭 / 会话静音 / 模型未就绪时静默跳过（不影响文字显示）。
      *
      * @param message 助手消息（content 已剥协议块）
@@ -106,6 +115,9 @@ class TtsManager(
 
         val lengthScale = settingsManager.getTtsLengthScale().toFloat()
 
+        // 抢占最新发言权（见 speakSeq 字段注释）
+        val mySeq = speakSeq.incrementAndGet()
+
         // 打断上一段：取消合成 + 停止播放；同时复位播放中标记（新段合成期间不亮，
         // 喇叭图标只在真正出声时变亮——见下方 play 前置位）
         currentJob?.cancel()
@@ -123,6 +135,12 @@ class TtsManager(
                     config = TtsSynthesizer.SynthesisConfig(lengthScale = lengthScale)
                 )
                 Log.d(TAG, "speak: 合成完成，audio=${audio.size} 样本")
+                // 合成期间可能有更新的 speak/stop（cancel 对 native 推理无效）：
+                // 已过期则丢弃本段，不播放、不碰播放状态
+                if (mySeq != speakSeq.get()) {
+                    Log.w(TAG, "speak: 合成完成但已有更新的 speak/stop（seq=$mySeq → ${speakSeq.get()}），丢弃本段")
+                    return@launch
+                }
                 if (audio.isNotEmpty()) {
                     // 真正开始播放前才亮（合成 / 排队阶段喇叭保持熄灭）
                     _isPlaying.value = true
@@ -137,7 +155,8 @@ class TtsManager(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "合成失败: $text", e)
-                _isPlaying.value = false
+                // 仅当自己仍是最新 speak 才复位播放状态，避免旧协程的失败误清新段的 isPlaying
+                if (mySeq == speakSeq.get()) _isPlaying.value = false
             }
         }
     }
@@ -145,6 +164,7 @@ class TtsManager(
     /** 停止当前朗读并取消待合成任务。 */
     fun stop() {
         Log.d(TAG, "stop() 调用（取消合成 + 停播放）")
+        speakSeq.incrementAndGet()   // 让在途合成完成后自行丢弃（cancel 挡不住 native 推理）
         currentJob?.cancel()
         currentJob = null
         player.stop()

@@ -36,10 +36,6 @@ Android 上的 Live2D AI 桌宠：在主页与系统悬浮窗里渲染 Live2D �
 
 从 [Releases](https://github.com/llz121517/mea-pet-mobile/releases) 页面下载最新的 APK 直接安装，无需自行编译。
 
-```bash
-adb install MeaPet-v1.7.0.APK
-```
-
 #### 方式二：手动编译
 
 **1. 克隆仓库**
@@ -87,7 +83,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 | 字段 | 说明 |
 |------|------|
 | **API Key** | API 密钥。**可留空**——本地模型（Ollama / LM Studio 等）无需鉴权；云端服务缺 Key 会在请求时提示填写 |
-| **API 地址** | OpenAI 兼容的 API 基础 URL（可带或不带 `/v1`，客户端会自动规范化） |
+| **API 地址** | OpenAI 兼容的 API 基础 URL（含版本路径，如 `/v1`、`/v4`；地址原样使用，不自动附加版本号） |
 
 **模型参数**：
 
@@ -131,9 +127,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 | 操作 | 说明 |
 |------|------|
-| **下载模型** | 从 GitHub Releases 拉取约 92MB（4 个 ONNX 模型 + 当前设备架构的 ONNX Runtime 原生库），支持断点续传 |
+| **下载模型** | 从 GitHub Releases 拉取约 73MB（4 个 ONNX 模型；ONNX Runtime 原生库随 APK 打包，无需下载），支持断点续传 |
 | **从本地导入** | 网络受限无法访问 GitHub 时，从本地 zip 资源包导入（详见下文「资源包格式」）。导入完成后自动切换为就绪状态 |
-| **删除模型** | 已就绪时显示，删除模型与运行库释放空间（会同时关闭语音开关） |
+| **删除模型** | 已就绪时显示，删除模型释放空间（会同时关闭语音开关） |
 
 **发声**（模型就绪后开放，未就绪置灰）：
 
@@ -149,10 +145,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 
 ```
 enc_p.onnx  dp.onnx  flow.onnx  dec.onnx
-libonnxruntime-<abi>.so            # 各 ABI 的 ONNX Runtime 原生库
 ```
 
-导入规则：**ONNX 全量导入**；**原生库按当前设备 ABI 选择性导入**（只落盘匹配的那一份）。兼容打包时误嵌套子文件夹的情况（自动在子目录中查找，最多 2 层）。
+导入规则：**4 个 ONNX 全量导入**（ONNX Runtime 原生库随 APK 分发，资源包无需携带；旧资源包里多余的 so 会被跳过）。兼容打包时误嵌套子文件夹的情况（自动在子目录中查找，最多 2 层）。
 
 #### 关于
 

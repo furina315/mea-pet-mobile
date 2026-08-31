@@ -16,6 +16,12 @@ val localProperties = Properties().apply {
 val umengAppKey: String = localProperties.getProperty("umeng.appKey", "") ?: ""
 // 友盟分发渠道名（按分发来源命名）
 val umengChannel: String = localProperties.getProperty("umeng.channel", "GitHub") ?: "GitHub"
+// 友盟统计 SDK 门控：false 时 SDK 不打包进 APK（依赖退化为 compileOnly），
+// 统计接入代码、首启隐私弹窗与关于页授权管理经 BuildConfig.UMENG_ENABLED 全部失效。
+// 优先级：gradle -Pumeng.enabled > local.properties umeng.enabled > 默认 true。
+// 命令行切换（CI/无统计构建）：./gradlew assembleDebug -Pumeng.enabled=false
+val umengEnabled: Boolean =
+    (project.findProperty("umeng.enabled") ?: localProperties.getProperty("umeng.enabled", "true")) == "true"
 // 开发者标识 / 仓库地址 / 交流群链接 / 友盟隐私政策链接（开源分叉时按需替换）
 val devName: String = localProperties.getProperty("app.devName", "") ?: ""
 val gitRepoUrl: String = localProperties.getProperty("app.gitRepoUrl", "") ?: ""
@@ -23,12 +29,6 @@ val qqGroupUrl: String = localProperties.getProperty("app.qqGroupUrl", "") ?: ""
 val umengPolicyUrl: String = localProperties.getProperty("app.umengPolicyUrl", "") ?: ""
 // TTS 模型下载地址（开源分叉时按需替换；缺省为空表示未配置，设置里下载入口将提示）
 val ttsModelBaseUrl: String = localProperties.getProperty("app.ttsModelBaseUrl", "") ?: ""
-// 隐私政策版本号与日期（开源分叉时按需替换）。
-// privacyVersion 为字符串（如 "1.1"），用户已看过/已同意的版本号记录在 DataStore，
-// 启动时若记录值不等于该值则重新弹窗。生效/更新日期用于隐私政策头部展示。
-val privacyVersion: String = localProperties.getProperty("app.privacyVersion", "1.1") ?: "1.1"
-val privacyEffectiveDate: String = localProperties.getProperty("app.privacyEffectiveDate", "2026-07-29") ?: "2026-07-29"
-val privacyUpdateDate: String = localProperties.getProperty("app.privacyUpdateDate", "2026-08-14") ?: "2026-08-14"
 
 android {
     namespace = "com.meapet.mobile"
@@ -42,8 +42,8 @@ android {
         applicationId = "com.meapet.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode =  11
-        versionName = "1.7.0"
+        versionCode =  12
+        versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -55,16 +55,14 @@ android {
         buildConfigField("String", "UMENG_APP_KEY", "\"$umengAppKey\"")
         // 友盟分发渠道名同样通过 BuildConfig 注入（分叉时可替换为自己的渠道）
         buildConfigField("String", "UMENG_CHANNEL", "\"$umengChannel\"")
+        // 友盟统计 SDK 是否打包进本构建（false = 无统计 SDK 构建，接入代码与授权 UI 全部失效）
+        buildConfigField("boolean", "UMENG_ENABLED", umengEnabled.toString())
         // 独特性标识信息同样通过 BuildConfig 注入，缺失时保持 _unset 占位（运行时回退默认）
         buildConfigField("String", "DEV_NAME", "\"$devName\"")
         buildConfigField("String", "GIT_REPO_URL", "\"$gitRepoUrl\"")
         buildConfigField("String", "QQ_GROUP_URL", "\"$qqGroupUrl\"")
         buildConfigField("String", "UMENG_POLICY_URL", "\"$umengPolicyUrl\"")
         buildConfigField("String", "TTS_MODEL_BASE_URL", "\"$ttsModelBaseUrl\"")
-        // 隐私政策版本号（String）与生效/更新日期（展示用）
-        buildConfigField("String", "PRIVACY_VERSION", "\"$privacyVersion\"")
-        buildConfigField("String", "PRIVACY_EFFECTIVE_DATE", "\"$privacyEffectiveDate\"")
-        buildConfigField("String", "PRIVACY_UPDATE_DATE", "\"$privacyUpdateDate\"")
     }
 
     buildTypes {
@@ -87,13 +85,8 @@ android {
         compose = true
         buildConfig = true
     }
-    // 原生 libonnxruntime.so 改为运行时按需下载（减小 APK），故此处排除 AAR 内嵌的 .so；
-    // 仅保留 onnxruntime-android 的 Java/JNI 绑定层（libonnxruntime4j_jni.so 体积很小）。
-    packaging {
-        jniLibs {
-            excludes += "lib/**/libonnxruntime.so"
-        }
-    }
+    // ONNX Runtime 原生库（libonnxruntime.so）随 AAR 打包进 APK，由上方 abiFilters
+    // 限制为仅 arm64-v8a / armeabi-v7a 两份；ONNX 模型仍走运行时下载 / 本地导入。
     // OpenJTalk 词典/拼音表等大文本 assets 需禁压缩（否则 aapt 压缩后某些读取路径会失败）
     aaptOptions {
         noCompress += listOf("bin", "dic", "txt")
@@ -151,10 +144,18 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     // 友盟+ 统计 SDK (U-APP)
-    implementation(libs.umeng.umsdk.common)  // 必选：统计核心
-    implementation(libs.umeng.umsdk.asms)    // 必选：重要组件
+    // umeng.enabled=false 时退化为 compileOnly：不打包进 APK，仅保留编译期符号。
+    // 运行时调用已被 BuildConfig.UMENG_ENABLED 短路（release 经 R8 常量折叠彻底移除），
+    // debug 未走该分支也不会触发类解析，安全。
+    if (umengEnabled) {
+        implementation(libs.umeng.umsdk.common)  // 必选：统计核心
+        implementation(libs.umeng.umsdk.asms)    // 必选：重要组件
+    } else {
+        compileOnly(libs.umeng.umsdk.common)
+        compileOnly(libs.umeng.umsdk.asms)
+    }
 
-    // 本地 VITS TTS：ONNX Runtime（Java 绑定；原生 libonnxruntime.so 运行时按需下载，见 TtsModelManager）
+    // 本地 VITS TTS：ONNX Runtime（原生 so 随 AAR 打包进 APK，仅 v8a/v7a；模型仍走运行时下载，见 TtsModelManager）
     implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)

@@ -10,6 +10,10 @@
 umeng.appKey=你的友盟AndroidAppKey
 # 友盟分发渠道名（按分发来源命名；默认 GitHub，分叉时可替换）
 umeng.channel=GitHub
+# 友盟统计 SDK 门控（true/false）：false 时不打包 SDK（无统计构建），
+# 统计接入代码、首启隐私弹窗与关于页授权管理全部失效。
+# 也可用命令行临时覆盖：./gradlew assembleDebug -Pumeng.enabled=false
+umeng.enabled=true
 
 # ── 应用独特性标识信息（开源分叉时替换为自己的） ──
 # 以下项均可选；留空或缺失时运行时回退到 MeaPet 原作者的默认值。
@@ -25,12 +29,3 @@ app.umengPolicyUrl=https://www.umeng.com/page/policy
 # ── TTS 语音模型 / 日语词典下载地址 ──
 # 语音模型 4 个 onnx 所在目录（GitHub Releases，文件名与远端同名，地址尾部不带文件名）
 app.ttsModelBaseUrl=https://github.com/llz121517/mea-pet-mobile/releases/download/tts-resource-pack
-
-# ── 隐私政策 ──
-# 版本号（字符串，如 1.1）：用户已看过版本号记录于 DataStore，
-# 启动时若记录值不等于该值则重新弹出隐私政策
-app.privacyVersion=1.1
-# 生效日期（展示于隐私政策头部）
-app.privacyEffectiveDate=2026-07-29
-# 更新日期（展示于隐私政策头部）
-app.privacyUpdateDate=2026-08-14

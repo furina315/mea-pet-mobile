@@ -39,8 +39,8 @@ object SettingsKeys {
     // ── 隐私政策 ──────────────────────────────────────
     /**
      * 用户最近一次已看过/已处理的隐私政策版本号。
-     * 启动时若该值不等于 BuildConfig.PRIVACY_VERSION，则重新弹出隐私政策
-     * 与「是否启用检查更新」弹窗。
+     * 启动时若该值不等于当前隐私政策版本（PrivacyPolicyContent.kt 的
+     * PRIVACY_POLICY_VERSION），则重新弹出隐私政策与「是否启用检查更新」弹窗。
      */
     const val PRIVACY_VERSION_SHOWN = "privacy_version_shown"
 

@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.meapet.mobile.viewmodel.SettingsUiState
 import com.meapet.mobile.viewmodel.SettingsViewModel
 
@@ -117,7 +116,7 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                 is com.meapet.mobile.tts.model.TtsModelState.Ready -> {
                     Text("语音模型已就绪", style = MaterialTheme.typography.bodyLarge)
                     Text(
-                        "模型与运行库已下载，语音功能可用",
+                        "模型与已下载，语音功能可用",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -165,7 +164,7 @@ private fun TtsModelCard(state: SettingsUiState, viewModel: SettingsViewModel) {
                     Text("语音模型未下载", style = MaterialTheme.typography.bodyLarge)
                     Text(
                         if (state.ttsModelUrlConfigured)
-                            "约 92MB（模型 + 运行库），下载后开放语音功能；网络受限可从本地 zip 导入"
+                            "约 72MB，下载后开放语音功能；网络受限可从本地 zip 导入"
                         else
                             "未配置模型下载地址，可从本地 zip 导入",
                         style = MaterialTheme.typography.bodySmall,

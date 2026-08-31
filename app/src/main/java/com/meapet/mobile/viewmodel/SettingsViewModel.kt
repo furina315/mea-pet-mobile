@@ -30,7 +30,7 @@ import kotlinx.coroutines.withContext
  * 设置界面 ViewModel。
  *
  * @property apiKey API Key
- * @property apiUrl API 根地址（通常以 `/v1` 结尾）
+ * @property apiUrl 完整 API 根地址（含版本路径，如 `/v1`、`/v4`）
  * @property model 模型名
  * @property availableModels 从 API 拉取的模型 id 列表
  * @property isLoadingModels 是否正在拉取模型列表
@@ -345,7 +345,7 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         viewModelScope.launch { settingsManager.setWallpaperBlur(blur) }
     }
 
-    /** 下载 TTS 模型（4 个 onnx + 当前 ABI 的原生库）。地址未配置则进入 Error 提示。 */
+    /** 下载 TTS 模型（4 个 onnx）。地址未配置则进入 Error 提示。 */
     fun downloadTtsModel() {
         viewModelScope.launch {
             val files = ttsModelManager.buildDownloadFiles(container.config.ttsModelBaseUrl)
@@ -355,7 +355,7 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
 
     /**
      * 从本地 zip 资源包手动导入 TTS 模型（绕过 GitHub 下载）。
-     * 导入前先停播并释放引擎，避免旧 session 占用即将被覆盖的 native 库。
+     * 导入前先停播并释放引擎，避免旧 session 占用即将被覆盖的模型文件。
      */
     fun importTtsModelZip(uri: android.net.Uri) {
         viewModelScope.launch {
@@ -364,7 +364,7 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    /** 删除模型与原生库，并强制关闭两个语音开关。 */
+    /** 删除模型，并强制关闭两个语音开关。 */
     fun deleteTtsModel() {
         viewModelScope.launch {
             // 先停播并关闭 ONNX session（73MB+ native 内存），再删磁盘文件，
@@ -380,7 +380,7 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
      * 用当前表单里的 Key / URL 拉取模型列表。
      *
      * 会先把 Key、URL 落盘并重建客户端（与后续聊天共用同一配置），
-     * 再用临时客户端请求 `/v1/models`，避免依赖 lazy 初始化时机。
+     * 再用临时客户端请求 `{base}/models`，避免依赖 lazy 初始化时机。
      */
     fun fetchModels(apiKey: String, apiUrl: String) {
         // 本地模型（Ollama / LM Studio 等）不需要 API Key，允许留空直接拉取

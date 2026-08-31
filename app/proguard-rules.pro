@@ -26,7 +26,8 @@
 }
 
 # ── 友盟+ 统计 SDK ────────────────────────────────────
-# AAR 自带混淆规则，兜底保留，避免上报数据异常
+# AAR 自带混淆规则，兜底保留，避免上报数据异常。
+# umeng.enabled=false 的无 SDK 构建里这些类不存在，规则自然不命中，无需移除。
 -keep class com.umeng.** { *; }
 -keep class org.repackage.** { *; }
 -dontwarn com.umeng.**

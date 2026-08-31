@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
+import com.meapet.mobile.BuildConfig
 import com.meapet.mobile.core.AppInfo
 import com.meapet.mobile.ui.component.LinkItem
 import com.meapet.mobile.viewmodel.SettingsUiState
@@ -81,7 +82,7 @@ internal fun AppInfoSection() {
     Spacer(Modifier.height(10.dp))
 
     Text(
-        "借助 Claude Code CLI，由 DeepSeek V4 Flash 强力赋能辅助开发",
+        "Say my name when a tree susurrates\nOnce and again telling a story lost in time",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -251,25 +252,35 @@ internal fun PrivacySection(
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Text(
-                text = if (umengAgreed)
-                    "已授权：友盟统计 SDK 正在采集去标识化的使用数据"
-                else
-                    "未授权：不会采集任何统计数据，App 正常使用",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (umengAgreed)
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_MUTED_TEXT),
-                modifier = Modifier.padding(top = 4.dp)
-            )
-            if (umengAgreed) {
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = { showRevokeDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("取消数据采集授权")
+            if (!BuildConfig.UMENG_ENABLED) {
+                // 无统计 SDK 构建：无采集、无授权可管，仅提示构建状态
+                Text(
+                    text = "该构建未包含统计 SDK，不会采集任何数据",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_MUTED_TEXT),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            } else {
+                Text(
+                    text = if (umengAgreed)
+                        "已授权：友盟统计 SDK 正在采集去标识化的使用数据"
+                    else
+                        "未授权：不会采集任何统计数据，App 正常使用",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (umengAgreed)
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = ALPHA_MUTED_TEXT),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+                if (umengAgreed) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { showRevokeDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("取消数据采集授权")
+                    }
                 }
             }
         }

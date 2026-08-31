@@ -18,7 +18,7 @@ private val json = Json { encodeDefaults = false }
 object ApiRequest {
 
     /**
-     * 构建 `/v1/chat/completions` 请求体。
+     * 构建 `/chat/completions` 请求体。
      *
      * @param messages 消息列表，由 [textMessage] 或 [visionMessage] 生成
      */
@@ -64,7 +64,7 @@ object ApiRequest {
     }
 
     /**
-     * 构建 `/v1/audio/transcriptions` 所需的 multipart/form-data 部件列表。
+     * 构建 `/audio/transcriptions` 所需的 multipart/form-data 部件列表。
      *
      * @param contentType 音频文件 MIME 类型，例如 `audio/mpeg`、`audio/wav`、`audio/mp4`
      */
@@ -94,7 +94,7 @@ object ApiRequest {
     }
 
     /**
-     * 构建 `/v1/audio/speech` 请求体。
+     * 构建 `/audio/speech` 请求体。
      */
     fun speech(
         model: String,
