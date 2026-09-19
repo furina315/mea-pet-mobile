@@ -120,6 +120,9 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        // 设置页毛玻璃：容器背景改为半透明遮罩，露出 GL 侧（设置页打开时）输出的
+        // 下层场景实时高斯模糊画面，形成毛玻璃背景；未开启模糊时退化为半透明主题色。
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = SETTINGS_SCRIM_ALPHA),
         topBar = {
             TopAppBar(
                 title = { Text(page.title) },
@@ -143,7 +146,9 @@ fun SettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = ALPHA_TOP_BAR)
+                    // 与页内卡片保持同一半透明材质（surfaceVariant × ALPHA_CARD_BG），露出毛玻璃背景，
+                    // 避免顶栏像一条实色横条、与其他控件视觉割裂。
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = ALPHA_CARD_BG)
                 )
             )
         }
@@ -171,7 +176,11 @@ fun SettingsScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 when (current) {
-                    SettingsPage.ROOT -> RootPage(state = state, onNavigate = { page = it })
+                    SettingsPage.ROOT -> RootPage(
+                        state = state,
+                        onNavigate = { page = it },
+                        onRestartOnboarding = settingsViewModel::restartOnboarding
+                    )
 
                     SettingsPage.PROVIDER -> {
                         SettingsCard { ApiConfigSection(state, settingsViewModel, local) }
@@ -222,7 +231,8 @@ fun SettingsScreen(
 @Composable
 private fun RootPage(
     state: SettingsUiState,
-    onNavigate: (SettingsPage) -> Unit
+    onNavigate: (SettingsPage) -> Unit,
+    onRestartOnboarding: () -> Unit
 ) {
     val entries = listOf(
         SettingsEntry(
@@ -252,6 +262,13 @@ private fun RootPage(
             summary = if (state.appVersion.isBlank()) "版本信息、隐私政策"
                       else "版本 ${state.appVersion}"
         ),
+        // 动作型条目：重置并重新展示初次使用引导
+        SettingsEntry(
+            iconRes = R.drawable.ic_help_outline,
+            title = "使用引导",
+            summary = "重新查看初次使用引导",
+            onClick = onRestartOnboarding
+        ),
     )
 
     Surface(
@@ -263,7 +280,13 @@ private fun RootPage(
     ) {
         Column(Modifier.fillMaxWidth()) {
             entries.forEachIndexed { index, entry ->
-                SettingsEntryRow(entry = entry, onClick = { onNavigate(entry.page) })
+                SettingsEntryRow(
+                    entry = entry,
+                    onClick = entry.onClick ?: {
+                        val target = entry.page
+                        if (target != null) onNavigate(target)
+                    }
+                )
                 if (index != entries.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 56.dp),
@@ -276,12 +299,22 @@ private fun RootPage(
     }
 }
 
-/** 入口列表的一行数据。 */
+/** 入口列表的一行数据。
+ *
+ * 两种条目：
+ * - 导航型：填 [page]，点击进入对应子页；
+ * - 动作型：填 [onClick]，点击直接执行动作（如重置引导）。
+ */
 private data class SettingsEntry(
-    val page: SettingsPage,
+    val page: SettingsPage? = null,
     val iconRes: Int,
     val summary: String,
-)
+    val title: String? = null,
+    val onClick: (() -> Unit)? = null,
+) {
+    /** 显示标题：动作型条目自带 [title]，导航型取页面名。 */
+    val displayTitle: String get() = title ?: page?.title.orEmpty()
+}
 
 /** 入口行：MD3 ListItem（前置图标 + 标题 + 摘要 + 右侧箭头）。 */
 @Composable
@@ -301,7 +334,7 @@ private fun SettingsEntryRow(
                 modifier = Modifier.size(24.dp)
             )
         },
-        headlineContent = { Text(entry.page.title) },
+        headlineContent = { Text(entry.displayTitle) },
         supportingContent = {
             Text(
                 text = entry.summary,

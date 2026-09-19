@@ -71,6 +71,7 @@ class SettingsManager(context: Context) {
     private val KEY_ENABLE_DYNAMIC_COLOR = booleanPreferencesKey(SettingsKeys.ENABLE_DYNAMIC_COLOR)
     private val KEY_COLOR_PRESET = stringPreferencesKey(SettingsKeys.COLOR_PRESET)
     private val KEY_FIRST_LAUNCH = booleanPreferencesKey(SettingsKeys.FIRST_LAUNCH)
+    private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey(SettingsKeys.ONBOARDING_COMPLETED)
     private val KEY_TTS_MAIN_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_MAIN_ENABLED)
     private val KEY_TTS_OVERLAY_ENABLED = booleanPreferencesKey(SettingsKeys.TTS_OVERLAY_ENABLED)
     private val KEY_TTS_LENGTH_SCALE = doublePreferencesKey(SettingsKeys.TTS_LENGTH_SCALE)
@@ -187,6 +188,11 @@ class SettingsManager(context: Context) {
         prefs[KEY_PRIVACY_VERSION_SHOWN] ?: SettingsKeys.Defaults.PRIVACY_VERSION_SHOWN
     }
 
+    /** 是否已完成初次使用引导流（默认 false = 未完成）。 */
+    val onboardingCompletedFlow: Flow<Boolean> = dataStore.data.map { prefs ->
+        prefs[KEY_ONBOARDING_COMPLETED] ?: SettingsKeys.Defaults.ONBOARDING_COMPLETED
+    }
+
     // ── 同步 getter（非 Flow 场景使用，如 Client 构造）──
     // 读取内存快照，全程无磁盘 IO；快照未就绪时返回空快照，各 getter 落到 Defaults，
     // 绝不在主线程阻塞读盘（首帧真实值由对应 Flow 就绪后修正）
@@ -243,6 +249,10 @@ class SettingsManager(context: Context) {
 
     /** 是否首次启动（同步读取；默认 true）。 */
     fun isFirstLaunch(): Boolean = currentPrefs()[KEY_FIRST_LAUNCH] ?: true
+
+    /** 是否已完成初次使用引导（同步读取；默认 false）。 */
+    fun isOnboardingCompleted(): Boolean =
+        currentPrefs()[KEY_ONBOARDING_COMPLETED] ?: SettingsKeys.Defaults.ONBOARDING_COMPLETED
 
     // ── 写入方法 ──────────────────────────────────────
     // edit 返回写入后的最新快照，随手更新缓存，保证同步 getter 读己之写
@@ -328,6 +338,11 @@ class SettingsManager(context: Context) {
     /** 记录已看过/已处理的隐私政策版本号。 */
     suspend fun setPrivacyVersionShown(version: String) {
         cachedPrefs = dataStore.edit { prefs -> prefs[KEY_PRIVACY_VERSION_SHOWN] = version }
+    }
+
+    /** 标记初次使用引导是否已完成（false 可重新触发引导）。 */
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        cachedPrefs = dataStore.edit { prefs -> prefs[KEY_ONBOARDING_COMPLETED] = completed }
     }
 
     suspend fun setWallpaperPath(path: String) {

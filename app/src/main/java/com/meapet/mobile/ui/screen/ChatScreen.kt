@@ -59,6 +59,7 @@ import com.meapet.mobile.chat.ChatUiState
 import com.meapet.mobile.chat.MemoryDialogUi
 import com.meapet.mobile.memory.MemoryType
 import com.meapet.mobile.settings.SettingsKeys
+import com.meapet.mobile.ui.component.BounceOverscrollBox
 import com.meapet.mobile.ui.component.ChatBubble
 import com.meapet.mobile.ui.component.ChatInputBar
 import com.meapet.mobile.ui.component.ErrorBubble
@@ -102,9 +103,10 @@ fun ChatScreenContent(
         currentPage = Page.CHAT
     }
 
-    // 切换页面时同步触摸分区开关（设置页内禁止穿透）——经 ViewModel 访问领域单例
+    // 切换页面时同步触摸分区开关与场景毛玻璃（设置页内禁止穿透，且下层场景切换为毛玻璃背景）——经 ViewModel 访问领域单例
     LaunchedEffect(currentPage) {
         chatViewModel.updateZoneTouchEnabled(currentPage == Page.CHAT)
+        chatViewModel.updateSceneBlurEnabled(currentPage == Page.SETTINGS)
     }
 
     AnimatedContent(
@@ -203,14 +205,16 @@ private fun ChatPage(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // ── Layer 1: 消息列表 ──
-        MessageList(
-            state = state,
-            listState = listState,
-            bubbleAlpha = bubbleAlpha,
-            onDismissError = { chatViewModel.onEvent(ChatEvent.DismissError) },
-            onRetry = { chatViewModel.onEvent(ChatEvent.RetryLastMessage) }
-        )
+        // ── Layer 1: 消息列表（iOS 风格弹性回弹：拖动时经缓动曲线阻尼位移，松手后平滑复位）──
+        BounceOverscrollBox(modifier = Modifier.fillMaxSize()) {
+            MessageList(
+                state = state,
+                listState = listState,
+                bubbleAlpha = bubbleAlpha,
+                onDismissError = { chatViewModel.onEvent(ChatEvent.DismissError) },
+                onRetry = { chatViewModel.onEvent(ChatEvent.RetryLastMessage) }
+            )
+        }
 
         // ── Layer 2: 顶部菜单 ──
         OverlayMenu(
