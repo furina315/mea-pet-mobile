@@ -120,6 +120,9 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        // 设置页毛玻璃：容器背景改为半透明遮罩，露出 GL 侧（设置页打开时）输出的
+        // 下层场景实时高斯模糊画面，形成毛玻璃背景；未开启模糊时退化为半透明主题色。
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = SETTINGS_SCRIM_ALPHA),
         topBar = {
             TopAppBar(
                 title = { Text(page.title) },
@@ -143,7 +146,9 @@ fun SettingsScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = ALPHA_TOP_BAR)
+                    // 与页内卡片保持同一半透明材质（surfaceVariant × ALPHA_CARD_BG），露出毛玻璃背景，
+                    // 避免顶栏像一条实色横条、与其他控件视觉割裂。
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = ALPHA_CARD_BG)
                 )
             )
         }

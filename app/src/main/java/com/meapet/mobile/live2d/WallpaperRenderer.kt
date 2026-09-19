@@ -121,6 +121,11 @@ class WallpaperRenderer {
             return
         }
 
+        // 记录调用前绑定的 framebuffer：模糊 pass 自身要切换 FBO，结束时须还原目标，
+        // 否则调用方（如场景毛玻璃）在离屏 FBO 内绘制时，壁纸会被误画到屏幕上。
+        val prevFbo = IntArray(1)
+        GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, prevFbo, 0)
+
         // 半分辨率坐标下的 σ 与截断半径（3σ clamp 到 16，贴合 33-tap 循环上限）
         val sigma = Live2dDefine.blurToSigma(blur) / Live2dDefine.BLUR_DOWNSAMPLE
         val radius = (sigma * 3f).coerceIn(1f, 16f)
@@ -153,8 +158,8 @@ class WallpaperRenderer {
             uv = UV_FBO                      // FBO 纹理：顶行 v=1
         )
 
-        // ── pass 2：垂直高斯 → 默认帧缓冲，线性放大回全屏 ──
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+        // ── pass 2：垂直高斯 → 还原调用前的帧缓冲，线性放大回全屏 ──
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, prevFbo[0])
         GLES20.glViewport(0, 0, w, h)
         bs.render(
             textureId = blurBuf,

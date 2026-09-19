@@ -228,6 +228,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * 设置页毛玻璃：进入设置页时把主界面场景（壁纸/桌宠）实时高斯模糊，
+     * 形成毛玻璃背景；退出设置页时恢复正常渲染。由 ChatScreen 页面切换时调用。
+     */
+    fun updateSceneBlurEnabled(enabled: Boolean) {
+        Live2dDelegate.getInstance().sceneBlurActive = enabled
+    }
+
+    /**
      * 处理 UI 事件。
      */
     fun onEvent(event: ChatEvent) {

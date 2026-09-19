@@ -43,9 +43,6 @@ import kotlinx.coroutines.launch
 //  设置页公共件：视觉常量、Slider 规格、基础行/分组组件
 // ═══════════════════════════════════════════════════
 
-/** 顶栏半透明背景 alpha。 */
-internal const val ALPHA_TOP_BAR = 0.85f
-
 /** 次要/说明文字 alpha。 */
 internal const val ALPHA_MUTED_TEXT = 0.6f
 
@@ -57,6 +54,10 @@ internal const val ALPHA_CARD_BG = 0.3f
 
 /** 模型列表卡片背景 alpha。 */
 internal const val ALPHA_CARD_BG_MID = 0.45f
+
+/** 设置页毛玻璃遮罩 alpha：GL 侧输出下层场景（壁纸/桌宠）的实时高斯模糊画面，
+ *  这里覆一层主题色半透明遮罩保证正文对比度（浅色主题近似白纱、深色近似黑纱）。 */
+internal const val SETTINGS_SCRIM_ALPHA = 0.55f
 
 /** 分割线 / 禁用文字 alpha。 */
 internal const val ALPHA_DIVIDER = 0.4f

@@ -68,6 +68,9 @@ class Live2dDelegate private constructor() {
     /** 主界面背景壁纸渲染器（GL 线程内绘制，无壁纸时 no-op）。 */
     val wallpaper = WallpaperRenderer()
 
+    /** 场景毛玻璃合成器（GL 线程内使用，仅 [sceneBlurActive] 时参与渲染）。 */
+    val sceneBlur = SceneBlurCompositor()
+
     /** 主界面背景壁纸文件绝对路径；null = 默认纯色。主线程写、GL 线程每帧读。 */
     var wallpaperPath: String?
         get() = wallpaper.desiredPath
@@ -88,6 +91,11 @@ class Live2dDelegate private constructor() {
     /** 触摸分区是否启用（设置页内禁用，防止穿透触发语音）。 */
     @Volatile
     var zoneTouchEnabled = true
+
+    /** 场景毛玻璃开关：设置页打开时置 true（主线程写、GL 线程每帧读）。
+     *  true 时整个场景先画进离屏 FBO、再高斯模糊后上屏，形成设置页背后的毛玻璃背景。 */
+    @Volatile
+    var sceneBlurActive = false
 
     /** 背景色 RGBA（0~1），跟随主题变化。默认浅色。
      *  Kotlin 的 @Volatile 只作用于单个属性，四个通道需各自标注。 */
@@ -172,6 +180,9 @@ class Live2dDelegate private constructor() {
         // 背景壁纸的旧上下文纹理/program 已失效，重置后下帧按 desiredPath 重载
         wallpaper.reset()
 
+        // 场景毛玻璃的 FBO/纹理/program 同属旧上下文，一并重置（下帧懒重建）
+        sceneBlur.reset()
+
         Log.d(TAG, "onSurfaceCreated complete")
     }
 
@@ -199,6 +210,18 @@ class Live2dDelegate private constructor() {
 
         Live2dPal.updateTime()
 
+        // ── 场景毛玻璃（设置页背景）：先画进离屏 FBO，再模糊上屏 ──
+        // beginScene 返回 false（资源异常）时降级为直绘屏幕，不影响功能。
+        if (sceneBlurActive && sceneBlur.beginScene(windowWidth, windowHeight)) {
+            renderScene()
+            sceneBlur.compositeToScreen(windowWidth, windowHeight)
+        } else {
+            renderScene()
+        }
+    }
+
+    /** 单帧场景绘制：清屏（纯色兜底）→ 背景壁纸 → Live2D 模型。渲染目标为当前绑定的 framebuffer。 */
+    private fun renderScene() {
         GLES20.glClearColor(bgR, bgG, bgB, bgA)
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
         GLES20.glClearDepthf(1.0f)
