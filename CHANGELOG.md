@@ -14,7 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<!-- 暂无可记录变更 -->
+### Added
+- **初次使用引导** — 首次启动（隐私协议之后）展示「欢迎 → 填写 API Key → 结束」三页引导：API Key 页内置 DeepSeek 开放平台、NVIDIA（均可点击跳转浏览器）与 QQ 反馈群（点击复制群号）获取指引，支持跳过；设置页新增「使用引导」入口，可随时重新查看。
+
+### Fixed
+- **修复启动崩溃** — `MainActivity.onCreate` 的 `isTaskRoot` 防护在退出路径上未调用 `super.onCreate()`，系统会抛 `SuperNotCalledException` 直接崩溃；现改为先走 `super.onCreate()` 再判断退出。
 
 ## [1.7.2] - 2026-09-11
 
