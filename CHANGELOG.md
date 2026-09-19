@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **初次使用引导** — 首次启动（隐私协议之后）展示「欢迎 → 填写 API Key → 结束」三页引导：API Key 页内置 DeepSeek 开放平台、NVIDIA（均可点击跳转浏览器）与 QQ 反馈群（点击复制群号）获取指引，支持跳过；设置页新增「使用引导」入口，可随时重新查看。
+
+### Fixed
+- **修复启动崩溃** — `MainActivity.onCreate` 的 `isTaskRoot` 防护在退出路径上未调用 `super.onCreate()`，系统会抛 `SuperNotCalledException` 直接崩溃；现改为先走 `super.onCreate()` 再判断退出。
 - **设置页背景毛玻璃效果** — 设置页（含子页）背景改为半透明遮罩，露出下层壁纸 + 桌宠经实时高斯模糊后的画面（GL 离屏 FBO + 两遍可分离高斯），顶栏材质与页内卡片统一。
 - **消息列表 iOS 风格弹性回弹** — 列表越界拖动时经缓动曲线阻尼位移、松手后平滑复位，替代系统原生拉伸效果。
 

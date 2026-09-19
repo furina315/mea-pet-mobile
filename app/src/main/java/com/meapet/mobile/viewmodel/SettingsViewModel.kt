@@ -225,6 +225,14 @@ open class SettingsViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /**
+     * 重置初次使用引导（供「设置 → 使用引导」调用）。
+     * MainActivity 订阅 onboardingCompletedFlow，重置后会自动重新展示引导页。
+     */
+    fun restartOnboarding() {
+        viewModelScope.launch { settingsManager.setOnboardingCompleted(false) }
+    }
+
     fun updateTemperature(temp: Double) {
         viewModelScope.launch { settingsManager.setTemperature(temp) }
     }

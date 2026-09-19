@@ -28,6 +28,13 @@ object SettingsKeys {
     const val COLOR_PRESET = "color_preset"  // "default" | "ocean" | "forest" | "sunset" | "rose" | "mono"
     const val FIRST_LAUNCH = "first_launch"
 
+    /**
+     * 是否已完成初次使用引导（欢迎 / 填写 API Key / 结束三页）。
+     * 独立于 [FIRST_LAUNCH]：后者在首次启动时即被消费（用于更新提示与隐私弹窗），
+     * 而引导需要在「设置 → 使用引导」里可重新触发，故单独记录。
+     */
+    const val ONBOARDING_COMPLETED = "onboarding_completed"
+
     // ── 界面外观 ─────────────────────────────────────
     /** 主页聊天气泡透明度：0.2~1.0，1.0 为不透明。 */
     const val CHAT_BUBBLE_ALPHA = "chat_bubble_alpha"
@@ -84,6 +91,10 @@ object SettingsKeys {
         // 隐私政策
         /** 已看过/已处理的隐私政策版本号；空串表示从未处理（首次启动）。 */
         const val PRIVACY_VERSION_SHOWN = ""
+
+        // 初次使用引导
+        /** 是否已完成引导；默认 false（首次启动时展示）。 */
+        const val ONBOARDING_COMPLETED = false
 
         // 背景壁纸
         const val WALLPAPER_PATH = ""

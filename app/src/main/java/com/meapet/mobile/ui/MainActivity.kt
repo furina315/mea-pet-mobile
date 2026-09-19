@@ -15,6 +15,14 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -76,12 +85,15 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("ClickableViewAccessibility", "SourceLockedOrientationActivity")
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
         // isTaskRoot 防护（Android 15+ 兼容）
+        // 注意：必须先把 super.onCreate 走完再判断退出，否则系统会因
+        // "did not call through to super.onCreate()" 抛 SuperNotCalledException 直接崩溃。
         if (!isTaskRoot) {
             finish()
             return
         }
-        super.onCreate(savedInstanceState)
 
         container = MeaPetApplication.from(applicationContext as android.app.Application)
 
@@ -165,6 +177,16 @@ class MainActivity : ComponentActivity() {
                 var showPrivacyDialog by remember { mutableStateOf(false) }
                 var showUpdateOptInDialog by remember { mutableStateOf(false) }
                 var privacyIsUpdate by remember { mutableStateOf(false) }
+                // 首帧即用同步读决定是否展示（避免 collectAsState 的 initial 时序问题导致重复展示）
+                var showOnboarding by remember { mutableStateOf(!settingsManager.isOnboardingCompleted()) }
+
+                // 初次使用引导：仅在"未完成 / 被重置"时置为展示。
+                // 这里 initial 给 true，且只在 false 时置位，避免完成后被 Flow 的中间值再次打开。
+                val onboardingCompleted by settingsManager.onboardingCompletedFlow
+                    .collectAsState(initial = true)
+                LaunchedEffect(onboardingCompleted) {
+                    if (!onboardingCompleted) showOnboarding = true
+                }
 
                 // 启动判定（首帧后异步执行，不阻塞渲染）：
                 // - 首次启动（first_launch）：先落 first_launch=false，再弹隐私政策 + 检查更新。
@@ -222,7 +244,41 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-                    ChatScreenContent(onToggleOverlay = { toggleOverlay() })
+                    // 聊天与引导互斥渲染：引导期间不组合聊天界面（避免下层内容透出与触摸穿透），
+                    // 且两侧都带过渡动画，避免引导"直接消失"的突兀感。
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // 聊天界面：引导完成后淡入
+                        AnimatedVisibility(
+                            visible = !showOnboarding,
+                            enter = fadeIn(animationSpec = tween(durationMillis = 350))
+                        ) {
+                            ChatScreenContent(onToggleOverlay = { toggleOverlay() })
+                        }
+
+                        // 初次使用引导：进入淡入并轻微下移，退出淡出并轻微缩小
+                        AnimatedVisibility(
+                            visible = showOnboarding,
+                            enter = fadeIn(animationSpec = tween(250)) +
+                                slideInVertically(animationSpec = tween(250)) { it / 10 },
+                            exit = fadeOut(animationSpec = tween(300)) +
+                                scaleOut(animationSpec = tween(300), targetScale = 0.94f)
+                        ) {
+                            com.meapet.mobile.ui.screen.onboarding.OnboardingScreen(
+                                initialApiKey = settingsManager.getApiKey(),
+                                onFinish = { key ->
+                                    // 先触发退场动画，再持久化（动画不阻塞数据保存）
+                                    showOnboarding = false
+                                    scope.launch {
+                                        // 先存 Key（失败也不影响完成标记），再落引导完成标记
+                                        runCatching {
+                                            if (key.isNotBlank()) settingsManager.setApiKey(key)
+                                        }
+                                        settingsManager.setOnboardingCompleted(true)
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
